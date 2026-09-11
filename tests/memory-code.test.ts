@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   getKnowledgeGraph,
   searchKnowledgeGraph,
@@ -10,6 +12,7 @@ import {
   getFileOutline,
   reindexCode,
 } from "../src/api.js";
+import { importProjectMemorySilent } from "../src/memory-sync.js";
 import { loadCliConfig } from "../src/config.js";
 
 describe("Agent Client MCP Memory & Cursor-Style Code Index API", () => {
@@ -67,5 +70,13 @@ describe("Agent Client MCP Memory & Cursor-Style Code Index API", () => {
     // Find symbol
     const symbols = await findSymbol(cfg, project, "app");
     expect(Array.isArray(symbols)).toBe(true);
+  });
+
+  it("imports project memory silently into local session disk with markdown snapshot", async () => {
+    const importRes = await importProjectMemorySilent(cfg, project, "test-agent");
+    expect(importRes.success).toBe(true);
+    expect(importRes.entityCount).toBeGreaterThan(0);
+    expect(existsSync(join(importRes.localPath, "knowledge-graph.json"))).toBe(true);
+    expect(existsSync(join(importRes.localPath, "MEMORY_SNAPSHOT.md"))).toBe(true);
   });
 });

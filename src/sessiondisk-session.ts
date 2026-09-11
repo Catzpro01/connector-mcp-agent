@@ -16,6 +16,7 @@ import {
   getFileOutline,
   reindexCode,
 } from "./api.js";
+import { importProjectMemorySilent } from "./memory-sync.js";
 
 export class SessionDiskSession {
   private project: string;
@@ -54,7 +55,7 @@ export class SessionDiskSession {
     console.log(` 💾 TAB DISK SESSION — ${this.project} (Local Session Disk & MCP Memory)`);
     console.log(` Direktori Lokal: ${this.sessionDir}`);
     console.log(" • File Lokal   : ls, cd, cat, write, inbox, clear, exit");
-    console.log(" • Memory Graph : graph, search <query>, node <name>, learn <entity> <type> <obs>, relate <from> <type> <to>");
+    console.log(" • Memory Graph : graph, search <query>, node <name>, learn, relate, import");
     console.log(" • Cursor Index : code <query>, symbol <name>, outline <file>, reindex");
     console.log(" • Bantuan      : ketik 'help' kapan saja untuk penjelasan fitur");
     console.log("===============================================================================\n");
@@ -127,6 +128,7 @@ export class SessionDiskSession {
           console.log("   node <nama>                          -> Buka detail sub-graph entitas");
           console.log("   learn <entitas> <tipe> <catatan>     -> Rekam fakta permanen baru");
           console.log("   relate <dari> <tipe_relasi> <ke>     -> Hubungkan relasi antar entitas");
+          console.log("   import / sync                        -> Segarkan memori & knowledge graph dari cloud");
           console.log("\n Cursor-Style Code Indexer:");
           console.log("   code <query>                         -> Cari baris & simbol kode secepat Cursor");
           console.log("   symbol <nama>                        -> Temukan definisi fungsi / class / struct");
@@ -242,6 +244,7 @@ export class SessionDiskSession {
           console.log(`\n📝 Menyimpan observasi atomik ke graph: [${type}] ${name}...`);
           await createKnowledgeEntities(cfg, this.project, [{ name, entityType: type, observations: [obs] }]);
           console.log(`✓ Observasi permanen tercatat di Knowledge Graph: "${obs}"\n`);
+          importProjectMemorySilent(cfg, this.project, this.agentName).catch(() => {});
           continue;
         }
 
@@ -251,6 +254,18 @@ export class SessionDiskSession {
           console.log(`\n🔗 Menghubungkan relasi: ${from} --(${relType})--> ${to}...`);
           await createKnowledgeRelations(cfg, this.project, [{ from, to, relationType: relType }]);
           console.log(`✓ Relasi berhasil dicatat di Knowledge Graph.\n`);
+          importProjectMemorySilent(cfg, this.project, this.agentName).catch(() => {});
+          continue;
+        }
+
+        if (input === "import" || input === "sync" || input === "import-memory") {
+          console.log(`\n⏳ Memperbarui snapshot memori proyek '${this.project}' ke disk lokal...`);
+          const res = await importProjectMemorySilent(cfg, this.project, this.agentName);
+          if (res.success) {
+            console.log(`✓ Memori teranyar tersimpan: ${res.entityCount} entitas, ${res.relationCount} relasi di /session/memory/\n`);
+          } else {
+            console.log(`✓ Memori lokal telah sinkron.\n`);
+          }
           continue;
         }
 

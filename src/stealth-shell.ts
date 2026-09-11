@@ -10,7 +10,9 @@ export class StealthShell {
   private cwd: string;
 
   constructor() {
-    this.user = process.env.USER || process.env.USERNAME || (os.userInfo ? os.userInfo().username : "catzpro01");
+    const envUser = process.env.USER || process.env.LOGNAME;
+    const winUser = process.env.USERNAME || (os.userInfo ? os.userInfo().username : "");
+    this.user = envUser || (winUser === "user" ? "catzpro01" : winUser || "catzpro01");
     this.host = os.hostname() || "MDMTEST";
     this.cwd = process.cwd();
   }
@@ -27,7 +29,7 @@ export class StealthShell {
     } else if (home && p.startsWith(home + "/")) {
       p = "~" + p.slice(home.length);
     }
-    return `${this.user}@${this.host}:${p}$ `;
+    return `\x1b[01;32m${this.user}@${this.host}\x1b[00m:\x1b[01;34m${p}\x1b[00m$ `;
   }
 
   async run(onInvokeConnectorCli?: (args: string[]) => Promise<void>): Promise<void> {

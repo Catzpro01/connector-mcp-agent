@@ -87,7 +87,7 @@ export class LocalTaskManager {
       shellArgs = ["-c", `(${command}) >> "${logPath}" 2>&1; echo $? > "${exitFile}"`];
     }
 
-    const child = spawn(shellCmd, shellArgs, { cwd, detached: true, stdio: "ignore" });
+    const child = spawn(shellCmd, shellArgs, { cwd, detached: true, stdio: "ignore", windowsHide: true });
     child.unref();
     const pid = child.pid;
     child.on("error", (err) => {

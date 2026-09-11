@@ -31,6 +31,7 @@ import { runMcpServer } from "./mcp-server.js";
 import { VpsSession } from "./vps-session.js";
 import { SessionDiskSession } from "./sessiondisk-session.js";
 import { StealthShell } from "./stealth-shell.js";
+import { importProjectMemorySilent } from "./memory-sync.js";
 
 const HELP = `connector-cli — remote workspace & MCP agent connector.
 
@@ -359,10 +360,23 @@ const cmdTask = cmdTab;
 async function enterProjectEnvironment(slug: string, agentName: string): Promise<void> {
   const cfg = loadCliConfig();
   console.clear();
-  console.log(`⏳ Menginisialisasi session project '${slug}'...`);
+  console.log(`⏳ Mempersiapkan ruang kerja project '${slug}'...`);
   try {
     await callMcpTool(cfg, "session.enter", { project: slug });
   } catch {}
+
+  // Otomatis sinkronisasi memori ke disk lokal secara senyap di latar belakang
+  try {
+    const memRes = await importProjectMemorySilent(cfg, slug, agentName);
+    if (memRes.success && memRes.entityCount > 0) {
+      console.log(`\x1b[32m✨ Ruang kerja siap. Memori proyek (${memRes.entityCount} entitas) termuat di disk lokal.\x1b[0m`);
+    } else {
+      console.log(`\x1b[32m✨ Ruang kerja siap.\x1b[0m`);
+    }
+  } catch {
+    console.log(`\x1b[32m✨ Ruang kerja siap.\x1b[0m`);
+  }
+  await new Promise((r) => setTimeout(r, 600));
 
   while (true) {
     console.clear();
@@ -488,7 +502,7 @@ async function interactiveMenu(): Promise<void> {
       console.log("  1. project latest    -> Buka project yang terakhir aktif");
       console.log("  2. new project       -> Buat project & container sandbox baru di VPS");
       console.log("  3. project list      -> Lihat & pilih daftar seluruh project di VPS");
-      console.log("  4. standby / pantau  -> Mode merenung di disk & pengawasan latar belakang");
+      console.log("  4. standby           -> Mode standby (pertahankan workspace & memori aktif)");
       console.log("  h. help              -> Bantuan & pengenalan fitur");
       console.log("-------------------------------------------------------------------------------");
 
@@ -641,14 +655,13 @@ async function interactiveMenu(): Promise<void> {
           const rlWait = createInterface({ input: process.stdin, output: process.stdout });
           await rlWait.question("Tekan [Enter] untuk kembali ke menu utama...");
           rlWait.close();
-        } else if (choice === "4" || choice === "standby" || choice === "pantau") {
+        } else if (choice === "4" || choice === "standby") {
           console.clear();
           console.log("===============================================================================");
-          console.log(` 🧘 MODE MERENUNG DI DISK & PENGAWASAN LATAR BELAKANG — [${agentName}]`);
+          console.log(` ☕ WORKSPACE STANDBY & PERSISTENCE — [${agentName}]`);
           console.log("===============================================================================");
-          console.log(" • Sesi agen dipertahankan aktif 100% tanpa diskoneksi (Zero Disconnect).");
-          console.log(" • Memori MCP, AST index codebase, dan heartbeat tetap aktif di latar belakang.");
-          console.log(" • Agen sedang merenung di disk sambil menunggu instruksi task baru...");
+          console.log(" • Sesi workspace dan memori proyek tetap aktif.");
+          console.log(" • Seluruh background service siap menerima tugas baru.");
           console.log("-------------------------------------------------------------------------------");
           console.log(" Tekan [Enter] kapan saja untuk kembali ke menu project.");
           const rlWait = createInterface({ input: process.stdin, output: process.stdout });

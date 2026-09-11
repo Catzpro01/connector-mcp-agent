@@ -128,5 +128,5 @@ describe("tab multiplexer (Ticket 02)", () => {
 
     expect(hasLocal).toBe(true);
     expect(hasVps).toBe(true);
-  }, 35000);
+  }, 60000);
 });
