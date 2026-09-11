@@ -31,7 +31,7 @@ import { runMcpServer } from "./mcp-server.js";
 import { VpsSession } from "./vps-session.js";
 import { SessionDiskSession } from "./sessiondisk-session.js";
 import { StealthShell } from "./stealth-shell.js";
-import { importProjectMemorySilent } from "./memory-sync.js";
+import { importProjectMemorySilent, startSilentAutoSyncWatcher } from "./memory-sync.js";
 import { clientPolicy } from "./agent-policy.js";
 
 const HELP = `connector-cli — remote workspace & MCP agent connector.
@@ -379,82 +379,88 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
   }
   await new Promise((r) => setTimeout(r, 600));
 
-  while (true) {
-    console.clear();
-    console.log("===============================================================================");
-    console.log(` 📂 RUANG KERJA PROJECT: \x1b[1;36m${slug}\x1b[0m`);
-    console.log(` Akses Agen: \x1b[1;32m${agentName}\x1b[0m`);
-    console.log("-------------------------------------------------------------------------------");
-    console.log("  a. tab vps          -> Interactive remote shell di container VPS");
-    console.log("  b. tab disk session  -> Local session disk & MCP memory graph");
-    console.log("  c. project list     -> Kembali ke daftar project");
-    console.log("  h. help             -> Bantuan & penjelasan fitur tab");
-    console.log("-------------------------------------------------------------------------------");
+  const stopAutoSync = startSilentAutoSyncWatcher(cfg, slug, agentName);
 
-    let choice = "";
-    try {
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      choice = (await rl.question("Pilih tab (a/b/c atau h): ")).trim().toLowerCase();
-      rl.close();
-    } catch (e: any) {
-      if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
-        process.stdout.write("^C\n");
-        const stealth = new StealthShell();
-        await stealth.run(async (args) => {
-          if (args.length === 0) {
-            await interactiveMenu();
-          } else {
-            await main(args);
-          }
-        });
-        continue;
+  try {
+    while (true) {
+      console.clear();
+      console.log("===============================================================================");
+      console.log(` 📂 RUANG KERJA PROJECT: \x1b[1;36m${slug}\x1b[0m`);
+      console.log(` Akses Agen: \x1b[1;32m${agentName}\x1b[0m`);
+      console.log("-------------------------------------------------------------------------------");
+      console.log("  a. tab vps          -> Interactive remote shell di container VPS");
+      console.log("  b. tab disk session  -> Local session disk & MCP memory graph");
+      console.log("  c. project list     -> Kembali ke daftar project");
+      console.log("  h. help             -> Bantuan & penjelasan fitur tab");
+      console.log("-------------------------------------------------------------------------------");
+
+      let choice = "";
+      try {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        choice = (await rl.question("Pilih tab (a/b/c atau h): ")).trim().toLowerCase();
+        rl.close();
+      } catch (e: any) {
+        if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+          process.stdout.write("^C\n");
+          const stealth = new StealthShell();
+          await stealth.run(async (args) => {
+            if (args.length === 0) {
+              await interactiveMenu();
+            } else {
+              await main(args);
+            }
+          });
+          continue;
+        }
+        throw e;
       }
-      throw e;
-    }
 
-    if (choice === "a" || choice === "1") {
-      console.clear();
-      const session = new VpsSession(slug);
-      await session.init();
-      await session.startInteractive();
-      console.clear();
-    } else if (choice === "b" || choice === "2") {
-      console.clear();
-      const diskSession = new SessionDiskSession(slug, agentName);
-      await diskSession.startInteractive();
-      console.clear();
-    } else if (choice === "h" || choice === "help" || choice === "?") {
-      console.clear();
-      console.log("===============================================================================");
-      console.log(` 💡 PANDUAN PENGENALAN FITUR TAB: ${slug}`);
-      console.log("===============================================================================");
-      console.log(" • a. TAB VPS (Interactive Remote Shell Container):");
-      console.log("   - Lingkungan eksekusi Linux asli di container VPS (/workspace).");
-      console.log("   - Jalankan build, testing, compile, package manager (npm, cargo, python, git).");
-      console.log("   - Multitasking: jalankan background tab dengan 'bg <command>' atau '<command> &'.");
-      console.log("   - Kirim progress: ketik 'lapor <pesan>' untuk posting ke GitHub Issues #progress.");
-      console.log("   - Buka forum diskusi GitHub: ketik 'forum'.");
-      console.log("   - Editor file: ketik 'nano <file>' atau 'write <file>'.");
-      console.log();
-      console.log(" • b. TAB DISK SESSION (Local Session Disk & MCP Knowledge Graph):");
-      console.log("   - Ruang observasi & memori permanen agen di mesin lokal/laptop.");
-      console.log("   - Memory Graph: ketik 'graph', 'search <query>', 'learn <entitas> <tipe> <catatan>'.");
-      console.log("   - Code Search Cepat: ketik 'code <query>', 'symbol <nama>', 'outline <file>'.");
-      console.log("   - File Refleksi Diri: 'inbox' untuk offline mentions & 'EVALUATION.md'.");
-      console.log();
-      console.log(" • c. PROJECT LIST:");
-      console.log("   - Kembali ke menu daftar project untuk berpindah workspace.");
-      console.log("===============================================================================\n");
-      const rlWait = createInterface({ input: process.stdin, output: process.stdout });
-      await rlWait.question("Tekan [Enter] untuk kembali ke menu tab...");
-      rlWait.close();
-    } else if (choice === "c" || choice === "3" || choice === "kembali" || choice === "back") {
-      console.clear();
-      break;
-    } else {
-      console.log("Pilihan tidak valid. Masukkan a, b, c, atau h.");
-      await new Promise((r) => setTimeout(r, 1000));
+      if (choice === "a" || choice === "1") {
+        console.clear();
+        const session = new VpsSession(slug);
+        await session.init();
+        await session.startInteractive();
+        console.clear();
+      } else if (choice === "b" || choice === "2") {
+        console.clear();
+        const diskSession = new SessionDiskSession(slug, agentName);
+        await diskSession.startInteractive();
+        console.clear();
+      } else if (choice === "h" || choice === "help" || choice === "?") {
+        console.clear();
+        console.log("===============================================================================");
+        console.log(` 💡 PANDUAN PENGENALAN FITUR TAB: ${slug}`);
+        console.log("===============================================================================");
+        console.log(" • a. TAB VPS (Interactive Remote Shell Container):");
+        console.log("   - Lingkungan eksekusi Linux asli di container VPS (/workspace).");
+        console.log("   - Jalankan build, testing, compile, package manager (npm, cargo, python, git).");
+        console.log("   - Multitasking: jalankan background tab dengan 'bg <command>' atau '<command> &'.");
+        console.log("   - Kirim progress: ketik 'lapor <pesan>' untuk posting ke GitHub Issues #progress.");
+        console.log("   - Buka forum diskusi GitHub: ketik 'forum'.");
+        console.log("   - Editor file: ketik 'nano <file>' atau 'write <file>'.");
+        console.log();
+        console.log(" • b. TAB DISK SESSION (Local Session Disk & MCP Knowledge Graph):");
+        console.log("   - Ruang observasi & memori permanen agen di mesin lokal/laptop.");
+        console.log("   - Memory Graph: ketik 'graph', 'search <query>', 'learn <entitas> <tipe> <catatan>'.");
+        console.log("   - Code Search Cepat: ketik 'code <query>', 'symbol <nama>', 'outline <file>'.");
+        console.log("   - File Refleksi Diri: 'inbox' untuk offline mentions & 'EVALUATION.md'.");
+        console.log();
+        console.log(" • c. PROJECT LIST:");
+        console.log("   - Kembali ke menu daftar project untuk berpindah workspace.");
+        console.log("===============================================================================\n");
+        const rlWait = createInterface({ input: process.stdin, output: process.stdout });
+        await rlWait.question("Tekan [Enter] untuk kembali ke menu tab...");
+        rlWait.close();
+      } else if (choice === "c" || choice === "3" || choice === "kembali" || choice === "back") {
+        console.clear();
+        break;
+      } else {
+        console.log("Pilihan tidak valid. Masukkan a, b, c, atau h.");
+        await new Promise((r) => setTimeout(r, 1000));
+      }
     }
+  } finally {
+    stopAutoSync();
   }
 }
 

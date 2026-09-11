@@ -17,7 +17,7 @@ import {
   reindexCode,
   reportAuditTelemetry,
 } from "./api.js";
-import { importProjectMemorySilent } from "./memory-sync.js";
+import { importProjectMemorySilent, startSilentAutoSyncWatcher } from "./memory-sync.js";
 
 export class SessionDiskSession {
   private project: string;
@@ -62,6 +62,7 @@ export class SessionDiskSession {
     console.log("===============================================================================\n");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const stopWatcher = startSilentAutoSyncWatcher(cfg, this.project, this.agentName);
 
     try {
       while (true) {
@@ -416,6 +417,7 @@ export class SessionDiskSession {
         console.log("Tersedia: ls, cd, cat, write, inbox, graph, search, node, learn, relate, code, symbol, outline, reindex, clear, exit\n");
       }
     } finally {
+      stopWatcher();
       rl.close();
     }
   }
