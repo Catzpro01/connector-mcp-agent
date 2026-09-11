@@ -53,4 +53,13 @@ describe("interactive VPS tab session (VpsSession)", () => {
     const res = await session.runCommand("exit 7");
     expect(res.exit).toBe(7);
   });
+
+  it("transparently strips connector-cli, vps, and exec prefixes in preprocessCommand", () => {
+    const session = new VpsSession("smoke-app");
+    expect(session.preprocessCommand("connector-cli vps whoami")).toBe("whoami");
+    expect(session.preprocessCommand("connector-cli exec ls -la")).toBe("ls -la");
+    expect(session.preprocessCommand("connector-cli whoami")).toBe("whoami");
+    expect(session.preprocessCommand("connector-cli pwd")).toBe("pwd");
+    expect(session.preprocessCommand("ls -l")).toBe("ls -l");
+  });
 });

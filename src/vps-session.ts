@@ -3,7 +3,22 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
-import { callMcpTool, getForumChannels, getForumComments, postForumComment } from "./api.js";
+import {
+  callMcpTool,
+  getForumChannels,
+  getForumComments,
+  postForumComment,
+  getKnowledgeGraph,
+  searchKnowledgeGraph,
+  openKnowledgeNodes,
+  addKnowledgeObservations,
+  createKnowledgeEntities,
+  createKnowledgeRelations,
+  searchCode,
+  findSymbol,
+  getFileOutline,
+  reindexCode,
+} from "./api.js";
 import { loadCliConfig } from "./config.js";
 import { tabManager, type UnifiedTab } from "./tab-manager.js";
 
@@ -66,6 +81,15 @@ export class VpsSession {
 
   preprocessCommand(cmd: string): string {
     let c = cmd.trim();
+    // Intercept & strip redundant connector-cli prefixes inside VPS shell
+    if (c.startsWith("connector-cli vps ")) {
+      c = c.slice("connector-cli vps ".length).trim();
+    } else if (c.startsWith("connector-cli exec ")) {
+      c = c.slice("connector-cli exec ".length).trim();
+    } else if (c.startsWith("connector-cli ")) {
+      c = c.slice("connector-cli ".length).trim();
+    }
+
     // Auto-escalate apt install if missing -y for noninteractive execution
     if (/^(sudo\s+)?apt(-get)?\s+install(\s+.*)?$/.test(c)) {
       if (!c.includes("-y") && !c.includes("--yes")) {
@@ -74,6 +98,177 @@ export class VpsSession {
       c = "DEBIAN_FRONTEND=noninteractive " + c;
     }
     return c;
+  }
+
+  async handleMemory(cmd: string): Promise<boolean> {
+    const cfg = loadCliConfig();
+    const trimmed = cmd.replace(/^(?:connector-cli\s+)?memory\s*/, "").trim();
+
+    if (cmd === "graph" || trimmed === "graph" || trimmed === "") {
+      console.log("\n⏳ Mengambil Knowledge Graph dari VPS...");
+      const g = await getKnowledgeGraph(cfg, this.project);
+      if (g.entities.length === 0) {
+        console.log("Belum ada entitas di Knowledge Graph project ini. Gunakan 'learn <entity> <type> <observasi>'.\n");
+      } else {
+        console.log(`\n🧠 KNOWLEDGE GRAPH: ${g.entities.length} entitas, ${g.relations.length} relasi`);
+        for (const e of g.entities) {
+          console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m (${e.observations.length} observasi):`);
+          for (const obs of e.observations) {
+            console.log(`      - ${obs}`);
+          }
+        }
+        if (g.relations.length > 0) {
+          console.log("  🔗 Relasi:");
+          for (const r of g.relations) {
+            console.log(`      - \x1b[1m${r.from}\x1b[0m --(\x1b[33m${r.relationType}\x1b[0m)--> \x1b[1m${r.to}\x1b[0m`);
+          }
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    const searchMatch = trimmed.match(/^search\s+(.+)$/);
+    if (searchMatch) {
+      const query = searchMatch[1].trim();
+      console.log(`\n🔍 Mencari node Knowledge Graph untuk: "${query}"...`);
+      const res = await searchKnowledgeGraph(cfg, this.project, query);
+      if (res.entities.length === 0) {
+        console.log("Tidak ditemukan entitas yang cocok.\n");
+      } else {
+        console.log(`Ditemukan ${res.entities.length} entitas terkait:`);
+        for (const e of res.entities) {
+          console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m:`);
+          for (const obs of e.observations) {
+            console.log(`      - ${obs}`);
+          }
+        }
+        if (res.relations.length > 0) {
+          console.log("  🔗 Relasi 1-hop:");
+          for (const r of res.relations) {
+            console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+          }
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    const nodeMatch = trimmed.match(/^node\s+(.+)$/);
+    if (nodeMatch) {
+      const name = nodeMatch[1].trim();
+      console.log(`\n📖 Mengambil sub-graph untuk entitas: "${name}"...`);
+      const res = await openKnowledgeNodes(cfg, this.project, [name]);
+      if (res.entities.length === 0) {
+        console.log(`Entitas '${name}' tidak ditemukan.\n`);
+      } else {
+        for (const e of res.entities) {
+          console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m:`);
+          for (const obs of e.observations) {
+            console.log(`      - ${obs}`);
+          }
+        }
+        if (res.relations.length > 0) {
+          console.log("  🔗 Relasi terhubung:");
+          for (const r of res.relations) {
+            console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+          }
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    const learnMatch = trimmed.match(/^learn\s+(\S+)\s+(\S+)\s+(.+)$/);
+    if (learnMatch) {
+      const [, name, type, obs] = learnMatch;
+      console.log(`\n📝 Menyimpan observasi atomik ke graph: [${type}] ${name}...`);
+      await createKnowledgeEntities(cfg, this.project, [{ name, entityType: type, observations: [obs] }]);
+      console.log(`✓ Observasi permanen tercatat di Knowledge Graph: "${obs}"\n`);
+      return true;
+    }
+
+    const relateMatch = trimmed.match(/^relate\s+(\S+)\s+(\S+)\s+(\S+)$/);
+    if (relateMatch) {
+      const [, from, relType, to] = relateMatch;
+      console.log(`\n🔗 Menghubungkan relasi: ${from} --(${relType})--> ${to}...`);
+      await createKnowledgeRelations(cfg, this.project, [{ from, to, relationType: relType }]);
+      console.log(`✓ Relasi berhasil dicatat di Knowledge Graph.\n`);
+      return true;
+    }
+
+    return false;
+  }
+
+  async handleCodeSearch(cmd: string): Promise<boolean> {
+    const cfg = loadCliConfig();
+
+    if (cmd === "reindex" || cmd === "connector-cli reindex") {
+      console.log("\n⏳ Memindai ulang codebase di VPS...");
+      const res = await reindexCode(cfg, this.project);
+      if (res.success) {
+        console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
+      } else {
+        console.log("Gagal melakukan re-index.\n");
+      }
+      return true;
+    }
+
+    const codeMatch = cmd.match(/^(?:connector-cli\s+)?code(?:\s+search)?\s+(.+)$/);
+    if (codeMatch) {
+      const q = codeMatch[1].trim().replace(/^["']|["']$/g, "");
+      console.log(`\n⚡ Pencarian kode cepat ala Cursor untuk: "${q}"...`);
+      const matches = await searchCode(cfg, this.project, q, 15);
+      if (matches.length === 0) {
+        console.log("Tidak ada kecocokan kode.\n");
+      } else {
+        console.log(`Ditemukan ${matches.length} baris/simbol kode:`);
+        for (const m of matches) {
+          const kindBadge = m.kind ? `\x1b[1;33m[${m.kind}]\x1b[0m ` : "";
+          console.log(`  • \x1b[1;34m${m.file}:${m.line}\x1b[0m ${kindBadge}(score: ${m.score})`);
+          console.log(`      \x1b[2m${m.preview}\x1b[0m`);
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    const symMatch = cmd.match(/^(?:connector-cli\s+)?symbol\s+(.+)$/);
+    if (symMatch) {
+      const sym = symMatch[1].trim();
+      console.log(`\n🔍 Mencari definisi simbol: "${sym}"...`);
+      const symbols = await findSymbol(cfg, this.project, sym);
+      if (symbols.length === 0) {
+        console.log("Simbol tidak ditemukan di codebase.\n");
+      } else {
+        console.log(`Ditemukan ${symbols.length} deklarasi simbol:`);
+        for (const s of symbols) {
+          console.log(`  • \x1b[1;33m[${s.kind}]\x1b[0m \x1b[1m${s.name}\x1b[0m di \x1b[1;34m${s.file}:${s.line}\x1b[0m`);
+          console.log(`      ${s.signature}`);
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    const outlineMatch = cmd.match(/^(?:connector-cli\s+)?outline\s+(.+)$/);
+    if (outlineMatch) {
+      const file = outlineMatch[1].trim();
+      console.log(`\n📑 Mengambil outline simbol file: "${file}"...`);
+      const symbols = await getFileOutline(cfg, this.project, file);
+      if (symbols.length === 0) {
+        console.log("Tidak ada simbol ditemukan atau file belum terindeks.\n");
+      } else {
+        console.log(`Outline ${file} (${symbols.length} simbol):`);
+        for (const s of symbols) {
+          console.log(`  • Line ${String(s.line).padEnd(4)} \x1b[1;33m[${s.kind.padEnd(9)}]\x1b[0m \x1b[1m${s.name}\x1b[0m: ${s.signature}`);
+        }
+        console.log();
+      }
+      return true;
+    }
+
+    return false;
   }
 
   async handleEditor(editorCmd: string, filename: string): Promise<void> {
@@ -388,10 +583,82 @@ export class VpsSession {
           continue;
         }
 
+        // Help & Info
+        if (input === "help" || input === "connector-cli help") {
+          console.log("\n======================== BANTUAN PERINTAH TAB VPS ========================");
+          console.log(" Anda berada di dalam Tab VPS (Remote Sandbox Container).");
+          console.log(" Perintah Shell Linux dijalankan langsung di container:");
+          console.log("   whoami, pwd, ls -la, cat <file>, git status, npm test, python3 app.py");
+          console.log("\n Akses MCP Knowledge Graph (permanen di VPS):");
+          console.log("   graph                                -> Tampilkan seluruh Knowledge Graph");
+          console.log("   search <query>                       -> Cari entitas & relasi di graph");
+          console.log("   node <nama>                          -> Lihat detail sub-graph entitas");
+          console.log("   learn <entitas> <tipe> <catatan>     -> Rekam observasi permanen baru");
+          console.log("   relate <dari> <tipe_relasi> <ke>     -> Hubungkan relasi antar node");
+          console.log("\n Akses Cursor-Style Code Indexer:");
+          console.log("   code <query>                         -> Pencarian kode instan secepat Cursor");
+          console.log("   symbol <nama>                        -> Temukan definisi fungsi / class / struct");
+          console.log("   outline <file>                       -> Lihat daftar simbol file");
+          console.log("   reindex                              -> Pindai ulang AST codebase di VPS");
+          console.log("\n Navigasi & File Editor:");
+          console.log("   nano <file> | vim <file>             -> Edit file di terminal lokal");
+          console.log("   write <file>                         -> Tulis file langsung ke container");
+          console.log("   tabs | switch <name>                 -> Multitasking background tab");
+          console.log("   exit                                 -> Kembali ke menu project");
+          console.log("==========================================================================\n");
+          continue;
+        }
+
+        if (input === "connector-cli" || input === "connector-cli vps") {
+          console.log("ℹ️ Anda sudah berada di dalam Tab VPS (Remote Container).");
+          console.log("Ketik 'help' untuk daftar perintah, atau ketik langsung perintah Linux (misal: 'whoami', 'ls', 'pwd').\n");
+          continue;
+        }
+
+        // Intercept MCP Memory Commands
+        if (
+          input === "graph" ||
+          input.startsWith("graph ") ||
+          input.startsWith("connector-cli memory") ||
+          input.startsWith("memory ") ||
+          input.startsWith("learn ") ||
+          input.startsWith("relate ") ||
+          input.startsWith("node ") ||
+          (input.startsWith("search ") && !input.startsWith("search-"))
+        ) {
+          const handled = await this.handleMemory(input);
+          if (handled) continue;
+        }
+
+        // Intercept Cursor-Style Code Index Commands
+        if (
+          input === "reindex" ||
+          input === "connector-cli reindex" ||
+          input.startsWith("code ") ||
+          input.startsWith("connector-cli code") ||
+          input.startsWith("symbol ") ||
+          input.startsWith("connector-cli symbol") ||
+          input.startsWith("outline ") ||
+          input.startsWith("connector-cli outline")
+        ) {
+          const handled = await this.handleCodeSearch(input);
+          if (handled) continue;
+        }
+
+        // Intercept general 'connector-cli vps <cmd>' or 'connector-cli <cmd>'
+        let targetCmd = input;
+        if (targetCmd.startsWith("connector-cli vps ")) {
+          targetCmd = targetCmd.slice("connector-cli vps ".length).trim();
+        } else if (targetCmd.startsWith("connector-cli exec ")) {
+          targetCmd = targetCmd.slice("connector-cli exec ".length).trim();
+        } else if (targetCmd.startsWith("connector-cli ")) {
+          targetCmd = targetCmd.slice("connector-cli ".length).trim();
+        }
+
         // Foreground execution
         try {
-          this.lastExecutedCmd = input;
-          const res = await this.runCommand(input);
+          this.lastExecutedCmd = targetCmd;
+          const res = await this.runCommand(targetCmd);
           if (res.stdout) process.stdout.write(res.stdout);
           if (res.stderr) process.stderr.write(`\x1b[31m${res.stderr}\x1b[0m`);
           if (res.exit !== 0) {
