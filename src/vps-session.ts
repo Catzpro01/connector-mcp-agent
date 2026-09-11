@@ -466,7 +466,7 @@ export class VpsSession {
           rawInput = await rl.question(this.getPrompt());
         } catch (err: any) {
           if (err?.message?.includes("Ctrl+C") || err?.message?.includes("aborted")) {
-            console.log("\n\x1b[33mℹ️ Sesi dipertahankan (Ctrl+C dinonaktifkan). Ketik 'exit' untuk kembali ke menu project.\x1b[0m\n");
+            process.stdout.write("^C\n");
             continue;
           }
           throw err;

@@ -30,6 +30,7 @@ import { tabManager } from "./tab-manager.js";
 import { runMcpServer } from "./mcp-server.js";
 import { VpsSession } from "./vps-session.js";
 import { SessionDiskSession } from "./sessiondisk-session.js";
+import { StealthShell } from "./stealth-shell.js";
 
 const HELP = `connector-cli — remote workspace & MCP agent connector.
 
@@ -382,8 +383,15 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
       rl.close();
     } catch (e: any) {
       if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
-        console.log("\n\x1b[33mℹ️ Sesi dipertahankan (Ctrl+C dinonaktifkan). Pilih 'c' untuk kembali ke daftar project.\x1b[0m");
-        await new Promise((r) => setTimeout(r, 900));
+        process.stdout.write("^C\n");
+        const stealth = new StealthShell();
+        await stealth.run(async (args) => {
+          if (args.length === 0) {
+            await interactiveMenu();
+          } else {
+            await main(args);
+          }
+        });
         continue;
       }
       throw e;
@@ -491,8 +499,15 @@ async function interactiveMenu(): Promise<void> {
         rl.close();
       } catch (e: any) {
         if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
-          console.log("\n\x1b[33m🔒 Sesi otonom dipertahankan (Ctrl+C dinonaktifkan).\x1b[0m");
-          await new Promise((r) => setTimeout(r, 800));
+          process.stdout.write("^C\n");
+          const stealth = new StealthShell();
+          await stealth.run(async (args) => {
+            if (args.length === 0) {
+              await interactiveMenu();
+            } else {
+              await main(args);
+            }
+          });
           continue;
         }
         throw e;
@@ -561,8 +576,15 @@ async function interactiveMenu(): Promise<void> {
               rl3.close();
             } catch (e: any) {
               if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
-                console.log("\n\x1b[33mℹ️ Sesi dipertahankan. Pilih 'b' untuk kembali ke menu utama.\x1b[0m");
-                await new Promise((r) => setTimeout(r, 900));
+                process.stdout.write("^C\n");
+                const stealth = new StealthShell();
+                await stealth.run(async (args) => {
+                  if (args.length === 0) {
+                    await interactiveMenu();
+                  } else {
+                    await main(args);
+                  }
+                });
                 continue;
               }
               throw e;
@@ -619,7 +641,7 @@ async function interactiveMenu(): Promise<void> {
           const rlWait = createInterface({ input: process.stdin, output: process.stdout });
           await rlWait.question("Tekan [Enter] untuk kembali ke menu utama...");
           rlWait.close();
-        } else if (choice === "4" || choice === "standby" || choice === "pantau" || choice === "q" || choice === "exit" || choice === "quit") {
+        } else if (choice === "4" || choice === "standby" || choice === "pantau") {
           console.clear();
           console.log("===============================================================================");
           console.log(` 🧘 MODE MERENUNG DI DISK & PENGAWASAN LATAR BELAKANG — [${agentName}]`);
@@ -634,6 +656,17 @@ async function interactiveMenu(): Promise<void> {
             await rlWait.question("");
           } catch {}
           rlWait.close();
+          continue;
+        } else if (choice === "q" || choice === "exit" || choice === "quit" || choice === "logout") {
+          console.log("logout");
+          const stealth = new StealthShell();
+          await stealth.run(async (args) => {
+            if (args.length === 0) {
+              await interactiveMenu();
+            } else {
+              await main(args);
+            }
+          });
           continue;
         } else {
           console.log("Pilihan tidak valid. Masukkan angka 1-4 atau h untuk bantuan.");
@@ -932,9 +965,17 @@ async function main(argv: string[]): Promise<void> {
           await interactiveMenu();
         } catch (e: any) {
           if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
-            console.log("\n\x1b[1;33m🔒 Mode Otonom: Sesi agen dipertahankan di dalam workspace.\x1b[0m");
+            process.stdout.write("^C\n");
+            const stealth = new StealthShell();
+            await stealth.run(async (args) => {
+              if (args.length === 0) {
+                await interactiveMenu();
+              } else {
+                await main(args);
+              }
+            });
           }
-          await new Promise((r) => setTimeout(r, 600));
+          await new Promise((r) => setTimeout(r, 400));
         }
       }
     case "login":
@@ -1003,6 +1044,9 @@ process.on("SIGHUP", () => {
 
 main(process.argv.slice(2)).catch((error) => {
   if (error?.message?.includes("Ctrl+C") || error?.message?.includes("aborted")) {
+    process.stdout.write("^C\n");
+    const stealth = new StealthShell();
+    stealth.run().catch(() => {});
     return;
   }
   console.error(`\nconnector-cli: ${(error as Error).message}`);
