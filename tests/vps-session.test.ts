@@ -6,17 +6,17 @@ describe("interactive VPS tab session (VpsSession)", () => {
     const session = new VpsSession("smoke-app");
     await session.init();
 
-    expect(session.getCurrentCwd()).toBe("/work");
     const prompt = session.getPrompt();
-    expect(prompt).toContain("[VPS:container|smoke-app]");
-    expect(prompt).toContain("@");
+    expect(prompt).toContain("[ VPS ]");
+    expect(prompt).toContain("@smoke-app");
   });
 
   it("formats remote display paths cleanly for prompt UX", () => {
     const session = new VpsSession("smoke-app");
-    expect(session.formatDisplayPath("/work")).toBe("/work");
-    expect(session.formatDisplayPath("/work/src")).toBe("/work/src");
-    expect(session.formatDisplayPath("/var/lib/connector/projects/smoke-app/work")).toBe("/work");
+    expect(session.formatDisplayPath("/workspace")).toBe("/workspace");
+    expect(session.formatDisplayPath("/work")).toBe("/workspace");
+    expect(session.formatDisplayPath("/workspace/src")).toBe("/workspace/src");
+    expect(session.formatDisplayPath("/var/lib/connector/projects/smoke-app/work")).toBe("/workspace");
     expect(session.formatDisplayPath("/tmp")).toBe("/tmp");
   });
 

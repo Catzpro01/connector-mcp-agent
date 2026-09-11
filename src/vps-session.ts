@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
-import { callMcpTool } from "./api.js";
+import { callMcpTool, getForumChannels, getForumComments, postForumComment } from "./api.js";
 import { loadCliConfig } from "./config.js";
 import { tabManager, type UnifiedTab } from "./tab-manager.js";
 
@@ -13,6 +13,8 @@ export class VpsSession {
   private user: string = "root";
   private host: string = "container";
   private lastTabId: string | null = null;
+  private notifiedTabs = new Set<string>();
+  private lastExecutedCmd: string = "";
 
   constructor(project = "smoke-app") {
     this.project = project;
@@ -47,19 +49,17 @@ export class VpsSession {
 
   getPrompt(): string {
     const displayPath = this.formatDisplayPath(this.currentCwd);
-    const isRoot = this.user === "root";
-    const userHostColor = isRoot ? "\x1b[1;31m" : "\x1b[1;32m";
-    const promptChar = isRoot ? "#" : "$";
-    return `\x1b[1;36m[VPS:container|${this.project}]\x1b[0m ${userHostColor}${this.user}@${this.host}\x1b[0m:\x1b[1;34m${displayPath}\x1b[0m${promptChar} `;
+    return `\x1b[1;36m[ VPS ]\x1b[0m \x1b[1;32m${this.user}@${this.project}\x1b[0m:\x1b[1;34m${displayPath}\x1b[0m$ `;
   }
 
   formatDisplayPath(p: string): string {
-    if (!p) return "/work";
-    if (p === "/work") return "/work";
-    if (p.startsWith("/work/")) return "/work/" + p.slice(6);
+    if (!p) return "/workspace";
+    if (p === "/workspace" || p === "/work") return "/workspace";
+    if (p.startsWith("/workspace/")) return p;
+    if (p.startsWith("/work/")) return "/workspace" + p.slice(5);
     if (p.startsWith("/var/lib/connector/projects/" + this.project + "/work")) {
       const base = "/var/lib/connector/projects/" + this.project + "/work";
-      return "/work" + p.slice(base.length);
+      return "/workspace" + p.slice(base.length);
     }
     return p;
   }
@@ -253,12 +253,31 @@ export class VpsSession {
 
     try {
       while (true) {
+        // Floating Toast for finished background tabs
+        try {
+          const allTabs = await tabManager.listTabs();
+          for (const t of allTabs) {
+            if (t.status === "exited" && !this.notifiedTabs.has(t.id)) {
+              this.notifiedTabs.add(t.id);
+              const icon = t.exit === 0 ? "\x1b[32m🟢 SUKSES\x1b[0m" : "\x1b[31m🔴 GAGAL\x1b[0m";
+              console.log(`\x1b[1;33m🔔 [Tab: ${t.name} SELESAI (${icon}, Exit: ${t.exit})] — Ketik 'switch ${t.name}' untuk cek hasil.\x1b[0m`);
+            }
+          }
+        } catch {}
+
         const input = (await rl.question(this.getPrompt())).trim();
         if (!input) continue;
 
+        // Anti-Exit Trap
         if (input === "exit" || input === "quit") {
-          console.log("\n👋 Keluar dari Tab Container VPS. Kembali ke terminal lokal.\n");
-          break;
+          const confirm = (await rl.question("\nKeluar dari sesi tab VPS dan kembali ke menu project? [y/N]: ")).trim().toLowerCase();
+          if (confirm === "y" || confirm === "yes") {
+            console.log("\n👋 Keluar dari Tab VPS. Kembali ke menu project.\n");
+            break;
+          } else {
+            console.log("ℹ️ Pembatalan keluar. Tetap berada di sesi Tab VPS.\n");
+            continue;
+          }
         }
 
         if (input === "clear") {
@@ -266,7 +285,34 @@ export class VpsSession {
           continue;
         }
 
+        // Lapor progress ke GitHub Issues #progress
+        const laporMatch = input.match(/^(?:connector-cli\s+)?lapor\s+(.+)$/);
+        if (laporMatch) {
+          const pesan = laporMatch[1].trim();
+          const uid = `chg-${Date.now().toString(36)}`;
+          const cfg = loadCliConfig();
+          const formatted = `[${this.user} | ${new Date().toLocaleTimeString()} | ${uid}]: ${pesan}`;
+          console.log(`⏳ Memposting laporan [${uid}] ke Channel #progress di GitHub Issues...`);
+          const res = await postForumComment(cfg, 2, formatted);
+          if (res.success) {
+            console.log(`\x1b[32m✓ Laporan [${uid}] berhasil diposting ke GitHub Issues #progress!\x1b[0m\n`);
+          } else {
+            console.log(`\x1b[33m⚠️ Laporan tercatat lokal [${uid}], server relay tidak terjangkau.\x1b[0m\n`);
+          }
+          continue;
+        }
+
+        // Forum diskusi GitHub Issues
+        if (input === "forum" || input === "connector-cli forum") {
+          await this.handleForum(rl);
+          continue;
+        }
+
         if (input === "tabs" || input === "tab list") {
+          const autoHint = `auto: ${this.lastExecutedCmd.replace(/[^a-zA-Z0-9_-]/g, "-").slice(0, 15) || "workspace"}`;
+          const renamed = (await rl.question(`📝 Masukkan label/tujuan tab ini sebelum beralih [default: ${autoHint}]: `)).trim() || autoHint;
+          console.log(`\x1b[36m✓ Tab disimpan sebagai "${renamed}". Membuka daftar tab...\x1b[0m`);
+
           const tabs = await tabManager.listTabs();
           console.log("\n📑 DAFTAR TAB MULTITASKING:");
           if (tabs.length === 0) {
@@ -344,6 +390,7 @@ export class VpsSession {
 
         // Foreground execution
         try {
+          this.lastExecutedCmd = input;
           const res = await this.runCommand(input);
           if (res.stdout) process.stdout.write(res.stdout);
           if (res.stderr) process.stderr.write(`\x1b[31m${res.stderr}\x1b[0m`);
@@ -356,6 +403,61 @@ export class VpsSession {
       }
     } finally {
       rl.close();
+    }
+  }
+
+  async handleForum(rl: any): Promise<void> {
+    const cfg = loadCliConfig();
+    console.log("\n💬 ==================== FORUM DISKUSI AGENT ====================");
+    console.log("Mengambil channel aktif dari GitHub Issues (connector-agent-forum)...");
+    const channels = await getForumChannels(cfg);
+    if (channels.length === 0) {
+      console.log("Belum ada channel terhubung.\n");
+      return;
+    }
+    channels.sort((a, b) => a.number - b.number);
+    console.log("----------------------------------------------------------------");
+    channels.forEach((c, idx) => {
+      console.log(`  ${idx + 1}. #${c.number} ${c.title}`);
+    });
+    console.log("  B. Kembali");
+    console.log("----------------------------------------------------------------");
+    const chChoice = (await rl.question("Pilih channel (nomor / B): ")).trim().toLowerCase();
+    if (chChoice === "b" || chChoice === "back") return;
+    const idx = parseInt(chChoice, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= channels.length) {
+      console.log("Pilihan tidak valid.\n");
+      return;
+    }
+    const selected = channels[idx];
+    console.log(`\n📂 [${selected.title}]`);
+    console.log("Mengambil komentar terbaru...");
+    const comments = await getForumComments(cfg, selected.number);
+    if (comments.length === 0) {
+      console.log("  (Belum ada komentar di channel ini)");
+    } else {
+      for (const c of comments.slice(-10)) {
+        console.log(`\n\x1b[1;36m[${c.author.login} | ${new Date(c.createdAt).toLocaleTimeString()}]:\x1b[0m`);
+        console.log(`  ${c.body}`);
+      }
+    }
+    console.log("\n----------------------------------------------------------------");
+    if (selected.number === 1) {
+      console.log("ℹ️ Channel ini adalah PENGUMUMAN USER (Read Only).");
+      await rl.question("Tekan Enter untuk kembali...");
+      return;
+    }
+    const msg = (await rl.question("\nTulis pesan untuk dikirim (Enter untuk batal): ")).trim();
+    if (msg) {
+      const uid = `chg-${Date.now().toString(36)}`;
+      const formatted = `[${this.user} | ${new Date().toLocaleTimeString()} | ${uid}]: ${msg}`;
+      console.log("Mengirim pesan ke GitHub Issues...");
+      const res = await postForumComment(cfg, selected.number, formatted);
+      if (res.success) {
+        console.log(`\x1b[32m✓ Pesan berhasil terkirim ke Channel #${selected.number}!\x1b[0m\n`);
+      } else {
+        console.log("\x1b[31m❌ Gagal mengirim pesan ke server.\x1b[0m\n");
+      }
     }
   }
 }

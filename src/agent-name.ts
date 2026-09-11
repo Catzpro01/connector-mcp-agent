@@ -46,11 +46,20 @@ export function saveAgentName(name: string, dir: string = LOCAL_DISK_DIR): void 
   saveStoredConfig({ agentName: name }, dir);
 }
 
+export function readStoredSessionToken(agentName: string, dir: string = LOCAL_DISK_DIR): string | undefined {
+  const conf = readStoredConfig(dir);
+  return (conf as any)[`token_${agentName.toLowerCase()}`];
+}
+
+export function saveStoredSessionToken(agentName: string, token: string | undefined, dir: string = LOCAL_DISK_DIR): void {
+  saveStoredConfig({ [`token_${agentName.toLowerCase()}`]: token } as any, dir);
+}
+
 /** Asks once for the login name; automatically falls back to system username if non-interactive or skipped. */
 export async function promptAgentName(): Promise<string> {
-  let fallback = "agent";
+  let fallback = "matt";
   try {
-    fallback = userInfo().username || process.env.USERNAME || process.env.USER || "agent";
+    fallback = userInfo().username || process.env.USERNAME || process.env.USER || "matt";
   } catch {}
 
   if (!process.stdin.isTTY) {
@@ -59,7 +68,7 @@ export async function promptAgentName(): Promise<string> {
 
   try {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const raw = await rl.question(`Login agent [default: ${fallback}]: `);
+    const raw = await rl.question(`Nama agent [default: ${fallback}]: `);
     rl.close();
     return raw.trim() || fallback;
   } catch {

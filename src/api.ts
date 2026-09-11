@@ -83,3 +83,106 @@ export async function callMcpTool<T = unknown>(cfg: CliConfig, name: string, arg
   }
 }
 
+export async function authWithServer(
+  cfg: CliConfig,
+  agentName: string,
+  token?: string,
+): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    const res = await fetch(`${cfg.url}/api/registry/auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentName, token }),
+    });
+    const data = await res.json();
+    return data as { success: boolean; token?: string; error?: string };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
+export async function sendHeartbeat(
+  cfg: CliConfig,
+  agentName: string,
+  token: string,
+  opts?: { status?: "IDLE" | "BUSY" | "CHATTING"; project?: string; task?: string; gen?: number },
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${cfg.url}/api/registry/heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentName, token, ...opts }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function releaseServerSession(cfg: CliConfig, agentName: string, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${cfg.url}/api/registry/release`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentName, token }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface ForumChannel {
+  number: number;
+  title: string;
+  state: string;
+  comments: any[];
+}
+
+export interface ForumComment {
+  id: string;
+  author: { login: string };
+  body: string;
+  createdAt: string;
+}
+
+export async function getForumChannels(cfg: CliConfig): Promise<ForumChannel[]> {
+  try {
+    const res = await fetch(`${cfg.url}/api/forum/channels`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { channels?: ForumChannel[] };
+    return data.channels || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getForumComments(cfg: CliConfig, issueNum: number): Promise<ForumComment[]> {
+  try {
+    const res = await fetch(`${cfg.url}/api/forum/channels/${issueNum}/comments`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { comments?: ForumComment[] };
+    return data.comments || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function postForumComment(
+  cfg: CliConfig,
+  issueNum: number,
+  message: string,
+): Promise<{ success: boolean; url?: string }> {
+  try {
+    const res = await fetch(`${cfg.url}/api/forum/channels/${issueNum}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: message }),
+    });
+    if (!res.ok) return { success: false };
+    return (await res.json()) as { success: boolean; url?: string };
+  } catch {
+    return { success: false };
+  }
+}
+

@@ -2,15 +2,16 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { loadCliConfig, DEFAULT_CONNECTOR_URL } from "./config.js";
-import { getInheritance, getManifest, listProjects, callMcpTool, type ProjectSummary } from "./api.js";
+import { getInheritance, getManifest, listProjects, callMcpTool, authWithServer, sendHeartbeat, releaseServerSession, type ProjectSummary } from "./api.js";
 import { downloadSkills } from "./skills.js";
 import { createSessionDisk } from "./sessiondisk.js";
 import { registerMcpConfig } from "./mcp-config.js";
-import { promptAgentName, saveAgentName, readStoredAgentName, readStoredConfig, saveStoredConfig } from "./agent-name.js";
+import { promptAgentName, saveAgentName, readStoredAgentName, readStoredConfig, saveStoredConfig, readStoredSessionToken, saveStoredSessionToken } from "./agent-name.js";
 import { localTasks } from "./local-tasks.js";
 import { tabManager } from "./tab-manager.js";
 import { runMcpServer } from "./mcp-server.js";
 import { VpsSession } from "./vps-session.js";
+import { SessionDiskSession } from "./sessiondisk-session.js";
 
 const HELP = `connector-cli — remote workspace & MCP agent connector.
 
@@ -328,7 +329,42 @@ async function cmdTab(sub: string, args: string[]): Promise<void> {
 
 const cmdTask = cmdTab;
 
-/** Tampilan Menu Interaktif Bersih */
+/** Menampilkan Opsi Tab di dalam Project */
+async function enterProjectEnvironment(slug: string, agentName: string): Promise<void> {
+  const cfg = loadCliConfig();
+  console.log(`\n⏳ Menginisialisasi session project '${slug}'...`);
+  try {
+    await callMcpTool(cfg, "session.enter", { project: slug });
+  } catch {}
+
+  while (true) {
+    console.log(`\nPROJECT: ${slug}`);
+    console.log("----------------------");
+    console.log("  a. tab vps (interactive remote shell)");
+    console.log("  b. tab disk session (interactive remote shell)");
+    console.log("  c. project list (kembali)");
+    console.log("----------------------");
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const choice = (await rl.question("Pilih tab (a/b/c): ")).trim().toLowerCase();
+    rl.close();
+
+    if (choice === "a" || choice === "1") {
+      const session = new VpsSession(slug);
+      await session.init();
+      await session.startInteractive();
+    } else if (choice === "b" || choice === "2") {
+      const diskSession = new SessionDiskSession(slug, agentName);
+      await diskSession.startInteractive();
+    } else if (choice === "c" || choice === "3" || choice === "kembali" || choice === "back") {
+      break;
+    } else {
+      console.log("Pilihan tidak valid. Pilih a, b, atau c.");
+    }
+  }
+}
+
+/** Tampilan Menu Interaktif 3 Pilihan Bersih */
 async function interactiveMenu(): Promise<void> {
   let stored = readStoredConfig();
   if (!stored.url) {
@@ -337,70 +373,98 @@ async function interactiveMenu(): Promise<void> {
   }
   let agentName = process.env.CONNECTOR_AGENT || stored.agentName;
   if (!agentName) {
-    agentName = process.env.USERNAME || process.env.USER || "agent-primary";
+    agentName = await promptAgentName();
     saveAgentName(agentName);
   }
 
-  while (true) {
-    const cfg = loadCliConfig();
-    let serverStatus = "menghubungkan...";
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1200);
-      const res = await fetch(`${cfg.url}/health`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        serverStatus = `🟢 ${cfg.url} (VPS Terhubung - Bebas API Key)`;
-      } else {
-        serverStatus = `🟡 ${cfg.url} (HTTP ${res.status})`;
-      }
-    } catch {
-      serverStatus = `🔴 ${cfg.url} (Offline / Timeout)`;
+  const cfg = loadCliConfig();
+  console.log(`\n⏳ Mengautentikasi agen '${agentName}' ke server VPS...`);
+  const storedToken = readStoredSessionToken(agentName);
+  const authRes = await authWithServer(cfg, agentName, storedToken);
+
+  if (!authRes.success) {
+    console.error(`\n\x1b[31m❌ Akses Ditolak: ${authRes.error}\x1b[0m\n`);
+    process.exit(1);
+  }
+
+  if (authRes.token) {
+    saveStoredSessionToken(agentName, authRes.token);
+  }
+
+  // Heartbeat loop
+  const hbTimer = setInterval(() => {
+    if (authRes.token) {
+      sendHeartbeat(cfg, agentName!, authRes.token, { status: "IDLE" });
     }
+  }, 10_000);
 
-    console.log("\n=======================================================");
-    console.log(` login : ${agentName}`);
-    console.log(` server: ${serverStatus}`);
-    console.log("-------------------------------------------------------");
-    console.log("  1. project latest");
-    console.log("  2. new project");
-    console.log("  3. project list");
-    console.log("  4. 🌐 masuk ke tab vps (interactive remote shell)");
-    console.log("  5. new tab (run task background)");
-    console.log("  6. tab live (supervisi status multitask)");
-    console.log("  7. setting");
-    console.log("  8. exit");
-    console.log("=======================================================");
+  try {
+    while (true) {
+      console.log(`\nnama agent: ${agentName}`);
+      console.log("----------------------");
+      console.log("  1. project latest");
+      console.log("  2. new project");
+      console.log("  3. project list");
+      console.log("----------------------");
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const choice = (await rl.question("\nPilih menu (1-8): ")).trim();
-    rl.close();
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const choice = (await rl.question("Pilih menu (1-3): ")).trim();
+      rl.close();
 
-    try {
-      if (choice === "1") {
-        await cmdLatest();
-      } else if (choice === "2") {
-        await cmdNewProject();
-      } else if (choice === "3") {
-        await cmdList();
-      } else if (choice === "4") {
-        const session = new VpsSession("smoke-app");
-        await session.startInteractive();
-      } else if (choice === "5") {
-        await cmdNewTab();
-      } else if (choice === "6") {
-        await cmdTabs();
-      } else if (choice === "7") {
-        await cmdSetting();
-      } else if (choice === "8" || choice.toLowerCase() === "exit" || choice.toLowerCase() === "q") {
-        console.log("Sampai jumpa!");
-        break;
-      } else {
-        console.log("Pilihan tidak valid. Masukkan angka 1 sampai 8.");
+      try {
+        if (choice === "1") {
+          const { projects } = await listProjects(cfg);
+          const slug = projects.length > 0 ? projects[0].slug : "smoke-app";
+          await enterProjectEnvironment(slug, agentName);
+        } else if (choice === "2") {
+          const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+          const pName = (await rl2.question("Nama Project Baru: ")).trim();
+          const pDesc = (await rl2.question("Deskripsi Project (opsional): ")).trim();
+          rl2.close();
+          if (pName) {
+            console.log(`⏳ Membuat project '${pName}' di VPS...`);
+            const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
+              name: pName,
+              description: pDesc || "Workspace dibuat lewat connector-cli",
+            });
+            console.log(`✅ Project '${created.name}' berhasil dibuat.`);
+            await enterProjectEnvironment(created.slug, agentName);
+          }
+        } else if (choice === "3") {
+          const { projects } = await listProjects(cfg);
+          console.log("\n📦 DAFTAR PROJECT DI VPS:");
+          if (projects.length === 0) {
+            console.log("  (Belum ada project)");
+          } else {
+            projects.forEach((p, idx) => {
+              console.log(`  ${idx + 1}. ${p.slug} (${p.name})`);
+            });
+            console.log("  B. Kembali");
+            const rl3 = createInterface({ input: process.stdin, output: process.stdout });
+            const sel = (await rl3.question("\nPilih nomor project untuk dibuka (atau B): ")).trim().toLowerCase();
+            rl3.close();
+            if (sel !== "b" && sel !== "back" && sel) {
+              const idx = parseInt(sel, 10) - 1;
+              if (idx >= 0 && idx < projects.length) {
+                await enterProjectEnvironment(projects[idx].slug, agentName);
+              }
+            }
+          }
+        } else if (choice.toLowerCase() === "exit" || choice.toLowerCase() === "q") {
+          if (authRes.token) {
+            await releaseServerSession(cfg, agentName, authRes.token);
+          }
+          console.log("Sampai jumpa!");
+          break;
+        } else {
+          console.log("Pilihan tidak valid. Masukkan angka 1 sampai 3.");
+        }
+      } catch (err) {
+        console.error(`\n❌ Error: ${(err as Error).message}`);
       }
-    } catch (err) {
-      console.error(`\n❌ Error: ${(err as Error).message}`);
     }
+  } finally {
+    clearInterval(hbTimer);
   }
 }
 
