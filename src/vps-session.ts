@@ -461,7 +461,18 @@ export class VpsSession {
           }
         } catch {}
 
-        const input = (await rl.question(this.getPrompt())).trim();
+        let rawInput = "";
+        try {
+          rawInput = await rl.question(this.getPrompt());
+        } catch (err: any) {
+          if (err?.message?.includes("Ctrl+C") || err?.message?.includes("aborted")) {
+            console.log("\n\x1b[33mℹ️ Sesi dipertahankan (Ctrl+C dinonaktifkan). Ketik 'exit' untuk kembali ke menu project.\x1b[0m\n");
+            continue;
+          }
+          throw err;
+        }
+
+        const input = rawInput.replace(/\s+#.*$/, "").trim();
         if (!input) continue;
 
         // Anti-Exit Trap

@@ -375,9 +375,19 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
     console.log("  h. help             -> Bantuan & penjelasan fitur tab");
     console.log("-------------------------------------------------------------------------------");
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const choice = (await rl.question("Pilih tab (a/b/c atau h): ")).trim().toLowerCase();
-    rl.close();
+    let choice = "";
+    try {
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      choice = (await rl.question("Pilih tab (a/b/c atau h): ")).trim().toLowerCase();
+      rl.close();
+    } catch (e: any) {
+      if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+        console.log("\n\x1b[33mℹ️ Sesi dipertahankan (Ctrl+C dinonaktifkan). Pilih 'c' untuk kembali ke daftar project.\x1b[0m");
+        await new Promise((r) => setTimeout(r, 900));
+        continue;
+      }
+      throw e;
+    }
 
     if (choice === "a" || choice === "1") {
       console.clear();
@@ -466,18 +476,27 @@ async function interactiveMenu(): Promise<void> {
       console.log("===============================================================================");
       console.log(" 🌐 CONNECTOR MCP AGENT WORKSPACE");
       console.log(` Agen Aktif : \x1b[1;32m${agentName}\x1b[0m`);
-      console.log(` Server VPS : \x1b[1;34m${cfg.url}\x1b[0m`);
       console.log("-------------------------------------------------------------------------------");
       console.log("  1. project latest    -> Buka project yang terakhir aktif");
       console.log("  2. new project       -> Buat project & container sandbox baru di VPS");
       console.log("  3. project list      -> Lihat & pilih daftar seluruh project di VPS");
+      console.log("  4. standby / pantau  -> Mode merenung di disk & pengawasan latar belakang");
       console.log("  h. help              -> Bantuan & pengenalan fitur");
-      console.log("  q. keluar            -> Keluar dan disconnect sesi");
       console.log("-------------------------------------------------------------------------------");
 
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-      const choice = (await rl.question("Pilih menu (1-3 / h / q): ")).trim().toLowerCase();
-      rl.close();
+      let choice = "";
+      try {
+        const rl = createInterface({ input: process.stdin, output: process.stdout });
+        choice = (await rl.question("Pilih menu (1-4 / h): ")).trim().toLowerCase();
+        rl.close();
+      } catch (e: any) {
+        if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+          console.log("\n\x1b[33m🔒 Sesi otonom dipertahankan (Ctrl+C dinonaktifkan).\x1b[0m");
+          await new Promise((r) => setTimeout(r, 800));
+          continue;
+        }
+        throw e;
+      }
 
       try {
         if (choice === "1") {
@@ -490,14 +509,25 @@ async function interactiveMenu(): Promise<void> {
           console.log("===============================================================================");
           console.log(" ➕ BUAT PROJECT BARU DI VPS");
           console.log("===============================================================================\n");
-          const rl2 = createInterface({ input: process.stdin, output: process.stdout });
-          const pName = (await rl2.question("Nama Project Baru (Enter untuk batal): ")).trim();
-          if (!pName) {
+          let pName = "";
+          let pDesc = "";
+          try {
+            const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+            pName = (await rl2.question("Nama Project Baru (Enter untuk batal): ")).trim();
+            if (pName) {
+              pDesc = (await rl2.question("Deskripsi Project (opsional): ")).trim();
+            }
             rl2.close();
-            continue;
+          } catch (e: any) {
+            if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+              console.log("\n\x1b[33mℹ️ Pembuatan project dibatalkan.\x1b[0m");
+              await new Promise((r) => setTimeout(r, 800));
+              continue;
+            }
+            throw e;
           }
-          const pDesc = (await rl2.question("Deskripsi Project (opsional): ")).trim();
-          rl2.close();
+          if (!pName) continue;
+
           console.log(`\n⏳ Menginisialisasi project '${pName}' & membuat sandbox di VPS...`);
           const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
             name: pName,
@@ -524,9 +554,19 @@ async function interactiveMenu(): Promise<void> {
             console.log("  b. kembali           -> Kembali ke menu utama");
             console.log("  h. help              -> Penjelasan tentang project sandbox");
             console.log("-------------------------------------------------------------------------------");
-            const rl3 = createInterface({ input: process.stdin, output: process.stdout });
-            const sel = (await rl3.question("Pilih nomor project (atau B / H): ")).trim().toLowerCase();
-            rl3.close();
+            let sel = "";
+            try {
+              const rl3 = createInterface({ input: process.stdin, output: process.stdout });
+              sel = (await rl3.question("Pilih nomor project (atau B / H): ")).trim().toLowerCase();
+              rl3.close();
+            } catch (e: any) {
+              if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+                console.log("\n\x1b[33mℹ️ Sesi dipertahankan. Pilih 'b' untuk kembali ke menu utama.\x1b[0m");
+                await new Promise((r) => setTimeout(r, 900));
+                continue;
+              }
+              throw e;
+            }
 
             if (sel === "b" || sel === "back") {
               break;
@@ -579,15 +619,24 @@ async function interactiveMenu(): Promise<void> {
           const rlWait = createInterface({ input: process.stdin, output: process.stdout });
           await rlWait.question("Tekan [Enter] untuk kembali ke menu utama...");
           rlWait.close();
-        } else if (choice === "q" || choice === "exit" || choice === "quit") {
-          if (authRes.token) {
-            await releaseServerSession(cfg, agentName, authRes.token);
-          }
+        } else if (choice === "4" || choice === "standby" || choice === "pantau" || choice === "q" || choice === "exit" || choice === "quit") {
           console.clear();
-          console.log("👋 Sampai jumpa! Sesi agen telah dilepas dengan aman.\n");
-          break;
+          console.log("===============================================================================");
+          console.log(` 🧘 MODE MERENUNG DI DISK & PENGAWASAN LATAR BELAKANG — [${agentName}]`);
+          console.log("===============================================================================");
+          console.log(" • Sesi agen dipertahankan aktif 100% tanpa diskoneksi (Zero Disconnect).");
+          console.log(" • Memori MCP, AST index codebase, dan heartbeat tetap aktif di latar belakang.");
+          console.log(" • Agen sedang merenung di disk sambil menunggu instruksi task baru...");
+          console.log("-------------------------------------------------------------------------------");
+          console.log(" Tekan [Enter] kapan saja untuk kembali ke menu project.");
+          const rlWait = createInterface({ input: process.stdin, output: process.stdout });
+          try {
+            await rlWait.question("");
+          } catch {}
+          rlWait.close();
+          continue;
         } else {
-          console.log("Pilihan tidak valid. Masukkan angka 1-3, h untuk bantuan, atau q untuk keluar.");
+          console.log("Pilihan tidak valid. Masukkan angka 1-4 atau h untuk bantuan.");
           await new Promise((r) => setTimeout(r, 1000));
         }
       } catch (err) {
@@ -877,9 +926,17 @@ async function main(argv: string[]): Promise<void> {
   const [command, sub, ...rest] = cleanArgv;
   switch (command) {
     case undefined:
-      return interactiveMenu();
     case "menu":
-      return interactiveMenu();
+      while (true) {
+        try {
+          await interactiveMenu();
+        } catch (e: any) {
+          if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
+            console.log("\n\x1b[1;33m🔒 Mode Otonom: Sesi agen dipertahankan di dalam workspace.\x1b[0m");
+          }
+          await new Promise((r) => setTimeout(r, 600));
+        }
+      }
     case "login":
       return cmdLogin(sub);
     case "logout":
@@ -934,8 +991,20 @@ async function main(argv: string[]): Promise<void> {
   }
 }
 
+process.on("SIGINT", () => {
+  // Prevent abrupt termination on SIGINT to maintain agent session
+});
+process.on("SIGTERM", () => {
+  // Prevent termination on SIGTERM
+});
+process.on("SIGHUP", () => {
+  // Prevent termination on SIGHUP
+});
+
 main(process.argv.slice(2)).catch((error) => {
+  if (error?.message?.includes("Ctrl+C") || error?.message?.includes("aborted")) {
+    return;
+  }
   console.error(`\nconnector-cli: ${(error as Error).message}`);
-  process.exit(1);
 });
 

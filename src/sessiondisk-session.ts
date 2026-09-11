@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { LOCAL_DISK_DIR } from "./agent-name.js";
 import { loadCliConfig } from "./config.js";
 import {
+  callMcpTool,
   getKnowledgeGraph,
   searchKnowledgeGraph,
   openKnowledgeNodes,
@@ -62,8 +63,57 @@ export class SessionDiskSession {
 
     try {
       while (true) {
-        const input = (await rl.question(this.getPrompt())).trim();
+        let rawInput = "";
+        try {
+          rawInput = await rl.question(this.getPrompt());
+        } catch (err: any) {
+          if (err?.message?.includes("Ctrl+C") || err?.message?.includes("aborted")) {
+            console.log("\n\x1b[33mℹ️ Sesi dipertahankan (Ctrl+C dinonaktifkan). Ketik 'exit' untuk kembali ke menu project.\x1b[0m\n");
+            continue;
+          }
+          throw err;
+        }
+
+        // 1. Strip inline comments and trim
+        let input = rawInput.replace(/\s+#.*$/, "").trim();
         if (!input) continue;
+
+        // 2. Strip connector-cli prefix if present
+        if (input.startsWith("connector-cli ")) {
+          input = input.slice("connector-cli ".length).trim();
+        }
+
+        // 3. Forward VPS execution directly if requested inside session disk
+        if (input.startsWith("vps ") || input.startsWith("exec ")) {
+          const vpsCmd = input.replace(/^(?:vps|exec)\s+/, "").trim();
+          console.log(`\n⏳ Menjalankan di container VPS: "${vpsCmd}"...`);
+          try {
+            const res = await callMcpTool<{ stdout: string; stderr: string; exit: number }>(cfg, "exec.run", {
+              project: this.project,
+              command: vpsCmd,
+            });
+            if (res.stdout) process.stdout.write(res.stdout);
+            if (res.stderr) process.stderr.write(`\x1b[31m${res.stderr}\x1b[0m`);
+            if (res.exit !== 0) console.log(`\x1b[33m[Exit code: ${res.exit}]\x1b[0m`);
+          } catch (e: any) {
+            console.error(`Gagal eksekusi VPS: ${e.message}\n`);
+          }
+          console.log();
+          continue;
+        }
+
+        // 4. Normalize memory prefixes
+        if (input.startsWith("memory ")) {
+          input = input.slice("memory ".length).trim();
+        }
+        if (input === "memory") {
+          input = "graph";
+        }
+
+        // 5. Normalize code search
+        if (input.startsWith("code search ")) {
+          input = "code " + input.slice("code search ".length).trim();
+        }
 
         if (input === "help" || input === "?") {
           console.log("\n======================== BANTUAN TAB DISK SESSION ========================");
