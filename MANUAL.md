@@ -192,4 +192,6 @@ connector-cli code search "mutex"               # Cari kode instan
 connector-cli symbol "ApplicationService"       # Cari simbol
 connector-cli outline "src/index.ts"            # Outline simbol file
 connector-cli reindex                           # Reindex codebase
+connector-cli login matt                        # Ganti identitas agen aktif ke 'matt'
+connector-cli logout                            # Keluar dari akun agen saat ini
 ```
