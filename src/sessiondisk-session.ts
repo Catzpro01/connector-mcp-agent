@@ -2,6 +2,19 @@ import { createInterface } from "node:readline/promises";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LOCAL_DISK_DIR } from "./agent-name.js";
+import { loadCliConfig } from "./config.js";
+import {
+  getKnowledgeGraph,
+  searchKnowledgeGraph,
+  openKnowledgeNodes,
+  addKnowledgeObservations,
+  createKnowledgeEntities,
+  createKnowledgeRelations,
+  searchCode,
+  findSymbol,
+  getFileOutline,
+  reindexCode,
+} from "./api.js";
 
 export class SessionDiskSession {
   private project: string;
@@ -34,10 +47,13 @@ export class SessionDiskSession {
   }
 
   async startInteractive(): Promise<void> {
+    const cfg = loadCliConfig();
     console.log("\n===============================================================================");
-    console.log(` 💾 TAB DISK SESSION — ${this.project} (Local Session Disk)`);
+    console.log(` 💾 TAB DISK SESSION — ${this.project} (Local Session Disk & MCP Memory)`);
     console.log(` Direktori Lokal: ${this.sessionDir}`);
-    console.log(" Fitur: 'ls', 'cat <file>', 'write <file>', 'clear', 'inbox', 'exit'");
+    console.log(" • File Lokal   : ls, cd, cat, write, inbox, clear, exit");
+    console.log(" • Memory Graph : graph, search <query>, node <name>, learn <entity> <type> <obs>, relate <from> <type> <to>");
+    console.log(" • Cursor Index : code <query>, symbol <name>, outline <file>, reindex");
     console.log("===============================================================================\n");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -70,6 +86,167 @@ export class SessionDiskSession {
           continue;
         }
 
+        // ---- Memory Graph Commands ----
+        if (input === "graph") {
+          console.log("\n⏳ Mengambil Knowledge Graph dari VPS...");
+          const g = await getKnowledgeGraph(cfg, this.project);
+          if (g.entities.length === 0) {
+            console.log("Belum ada entitas di Knowledge Graph project ini. Gunakan 'learn <entity> <type> <observasi>'.\n");
+          } else {
+            console.log(`\n🧠 KNOWLEDGE GRAPH: ${g.entities.length} entitas, ${g.relations.length} relasi`);
+            for (const e of g.entities) {
+              console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m (${e.observations.length} observasi):`);
+              for (const obs of e.observations) {
+                console.log(`      - ${obs}`);
+              }
+            }
+            if (g.relations.length > 0) {
+              console.log("  🔗 Relasi:");
+              for (const r of g.relations) {
+                console.log(`      - \x1b[1m${r.from}\x1b[0m --(\x1b[33m${r.relationType}\x1b[0m)--> \x1b[1m${r.to}\x1b[0m`);
+              }
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        const searchMatch = input.match(/^search\s+(.+)$/);
+        if (searchMatch) {
+          const query = searchMatch[1].trim();
+          console.log(`\n🔍 Mencari node Knowledge Graph untuk: "${query}"...`);
+          const res = await searchKnowledgeGraph(cfg, this.project, query);
+          if (res.entities.length === 0) {
+            console.log("Tidak ditemukan entitas yang cocok.\n");
+          } else {
+            console.log(`Ditemukan ${res.entities.length} entitas terkait:`);
+            for (const e of res.entities) {
+              console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m:`);
+              for (const obs of e.observations) {
+                console.log(`      - ${obs}`);
+              }
+            }
+            if (res.relations.length > 0) {
+              console.log("  🔗 Relasi 1-hop:");
+              for (const r of res.relations) {
+                console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+              }
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        const nodeMatch = input.match(/^node\s+(.+)$/);
+        if (nodeMatch) {
+          const name = nodeMatch[1].trim();
+          console.log(`\n📖 Mengambil sub-graph untuk entitas: "${name}"...`);
+          const res = await openKnowledgeNodes(cfg, this.project, [name]);
+          if (res.entities.length === 0) {
+            console.log(`Entitas '${name}' tidak ditemukan.\n`);
+          } else {
+            for (const e of res.entities) {
+              console.log(`  • \x1b[1;36m[${e.entityType}]\x1b[0m \x1b[1m${e.name}\x1b[0m:`);
+              for (const obs of e.observations) {
+                console.log(`      - ${obs}`);
+              }
+            }
+            if (res.relations.length > 0) {
+              console.log("  🔗 Relasi terhubung:");
+              for (const r of res.relations) {
+                console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+              }
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        const learnMatch = input.match(/^learn\s+(\S+)\s+(\S+)\s+(.+)$/);
+        if (learnMatch) {
+          const [, name, type, obs] = learnMatch;
+          console.log(`\n📝 Menyimpan observasi atomik ke graph: [${type}] ${name}...`);
+          await createKnowledgeEntities(cfg, this.project, [{ name, entityType: type, observations: [obs] }]);
+          console.log(`✓ Observasi permanen tercatat di Knowledge Graph: "${obs}"\n`);
+          continue;
+        }
+
+        const relateMatch = input.match(/^relate\s+(\S+)\s+(\S+)\s+(\S+)$/);
+        if (relateMatch) {
+          const [, from, relType, to] = relateMatch;
+          console.log(`\n🔗 Menghubungkan relasi: ${from} --(${relType})--> ${to}...`);
+          await createKnowledgeRelations(cfg, this.project, [{ from, to, relationType: relType }]);
+          console.log(`✓ Relasi berhasil dicatat di Knowledge Graph.\n`);
+          continue;
+        }
+
+        // ---- Cursor-Style Code Index Commands ----
+        const codeMatch = input.match(/^code\s+(.+)$/);
+        if (codeMatch) {
+          const q = codeMatch[1].trim();
+          console.log(`\n⚡ Pencarian kode cepat ala Cursor untuk: "${q}"...`);
+          const matches = await searchCode(cfg, this.project, q, 15);
+          if (matches.length === 0) {
+            console.log("Tidak ada kecocokan kode.\n");
+          } else {
+            console.log(`Ditemukan ${matches.length} baris/simbol kode:`);
+            for (const m of matches) {
+              const kindBadge = m.kind ? `\x1b[1;33m[${m.kind}]\x1b[0m ` : "";
+              console.log(`  • \x1b[1;34m${m.file}:${m.line}\x1b[0m ${kindBadge}(score: ${m.score})`);
+              console.log(`      \x1b[2m${m.preview}\x1b[0m`);
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        const symbolMatch = input.match(/^symbol\s+(.+)$/);
+        if (symbolMatch) {
+          const sym = symbolMatch[1].trim();
+          console.log(`\n🔍 Mencari definisi simbol: "${sym}"...`);
+          const symbols = await findSymbol(cfg, this.project, sym);
+          if (symbols.length === 0) {
+            console.log("Simbol tidak ditemukan di codebase.\n");
+          } else {
+            console.log(`Ditemukan ${symbols.length} deklarasi simbol:`);
+            for (const s of symbols) {
+              console.log(`  • \x1b[1;33m[${s.kind}]\x1b[0m \x1b[1m${s.name}\x1b[0m di \x1b[1;34m${s.file}:${s.line}\x1b[0m`);
+              console.log(`      ${s.signature}`);
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        const outlineMatch = input.match(/^outline\s+(.+)$/);
+        if (outlineMatch) {
+          const file = outlineMatch[1].trim();
+          console.log(`\n📑 Mengambil outline simbol file: "${file}"...`);
+          const symbols = await getFileOutline(cfg, this.project, file);
+          if (symbols.length === 0) {
+            console.log("Tidak ada simbol ditemukan atau file belum terindeks.\n");
+          } else {
+            console.log(`Outline ${file} (${symbols.length} simbol):`);
+            for (const s of symbols) {
+              console.log(`  • Line ${String(s.line).padEnd(4)} \x1b[1;33m[${s.kind.padEnd(9)}]\x1b[0m \x1b[1m${s.name}\x1b[0m: ${s.signature}`);
+            }
+            console.log();
+          }
+          continue;
+        }
+
+        if (input === "reindex") {
+          console.log("\n⏳ Memindai ulang codebase di VPS...");
+          const res = await reindexCode(cfg, this.project);
+          if (res.success) {
+            console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
+          } else {
+            console.log("Gagal melakukan re-index.\n");
+          }
+          continue;
+        }
+
+        // ---- Standard File Operations ----
         if (input === "ls" || input === "dir") {
           try {
             const entries = readdirSync(this.currentDir);
@@ -130,7 +307,8 @@ export class SessionDiskSession {
           continue;
         }
 
-        console.log(`Perintah lokal '${input}' tidak dikenal. Tersedia: ls, cd, cat, write, inbox, clear, exit\n`);
+        console.log(`Perintah '${input}' tidak dikenal.`);
+        console.log("Tersedia: ls, cd, cat, write, inbox, graph, search, node, learn, relate, code, symbol, outline, reindex, clear, exit\n");
       }
     } finally {
       rl.close();

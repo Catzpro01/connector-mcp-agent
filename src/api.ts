@@ -186,3 +186,168 @@ export async function postForumComment(
   }
 }
 
+export interface Entity {
+  name: string;
+  entityType: string;
+  observations: string[];
+}
+
+export interface Relation {
+  from: string;
+  to: string;
+  relationType: string;
+}
+
+export interface KnowledgeGraphData {
+  entities: Entity[];
+  relations: Relation[];
+}
+
+export interface SubGraphView {
+  entities: Entity[];
+  relations: Relation[];
+}
+
+export interface CodeMatch {
+  file: string;
+  line: number;
+  kind?: string;
+  symbolName?: string;
+  preview: string;
+  score: number;
+}
+
+export interface SymbolInfo {
+  name: string;
+  kind: string;
+  file: string;
+  line: number;
+  signature: string;
+}
+
+export async function getKnowledgeGraph(cfg: CliConfig, project: string): Promise<KnowledgeGraphData> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/graph`);
+    if (!res.ok) return { entities: [], relations: [] };
+    return (await res.json()) as KnowledgeGraphData;
+  } catch {
+    return { entities: [], relations: [] };
+  }
+}
+
+export async function searchKnowledgeGraph(cfg: CliConfig, project: string, query: string): Promise<SubGraphView> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return { entities: [], relations: [] };
+    return (await res.json()) as SubGraphView;
+  } catch {
+    return { entities: [], relations: [] };
+  }
+}
+
+export async function openKnowledgeNodes(cfg: CliConfig, project: string, names: string[]): Promise<SubGraphView> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/nodes/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ names }),
+    });
+    if (!res.ok) return { entities: [], relations: [] };
+    return (await res.json()) as SubGraphView;
+  } catch {
+    return { entities: [], relations: [] };
+  }
+}
+
+export async function createKnowledgeEntities(cfg: CliConfig, project: string, entities: Entity[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/entities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entities }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function createKnowledgeRelations(cfg: CliConfig, project: string, relations: Relation[]): Promise<boolean> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/relations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relations }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function addKnowledgeObservations(
+  cfg: CliConfig,
+  project: string,
+  entityName: string,
+  contents: string[],
+): Promise<{ success: boolean; addedObservations?: string[] }> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/memory/observations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entityName, contents }),
+    });
+    if (!res.ok) return { success: false };
+    return (await res.json()) as { success: boolean; addedObservations?: string[] };
+  } catch {
+    return { success: false };
+  }
+}
+
+export async function searchCode(cfg: CliConfig, project: string, query: string, limit = 25): Promise<CodeMatch[]> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/code/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { matches: CodeMatch[] };
+    return data.matches || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function findSymbol(cfg: CliConfig, project: string, name: string): Promise<SymbolInfo[]> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/code/symbol?name=${encodeURIComponent(name)}`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { symbols: SymbolInfo[] };
+    return data.symbols || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getFileOutline(cfg: CliConfig, project: string, file: string): Promise<SymbolInfo[]> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/code/outline?file=${encodeURIComponent(file)}`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as { symbols: SymbolInfo[] };
+    return data.symbols || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function reindexCode(cfg: CliConfig, project: string): Promise<{ success: boolean; scannedFiles?: number; indexedSymbols?: number }> {
+  try {
+    const res = await fetch(`${cfg.url}/api/projects/${project}/code/reindex`, { method: "POST" });
+    if (!res.ok) return { success: false };
+    return (await res.json()) as { success: boolean; scannedFiles?: number; indexedSymbols?: number };
+  } catch {
+    return { success: false };
+  }
+}
+

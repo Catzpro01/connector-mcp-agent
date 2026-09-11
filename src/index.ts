@@ -2,7 +2,25 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { loadCliConfig, DEFAULT_CONNECTOR_URL } from "./config.js";
-import { getInheritance, getManifest, listProjects, callMcpTool, authWithServer, sendHeartbeat, releaseServerSession, type ProjectSummary } from "./api.js";
+import {
+  getInheritance,
+  getManifest,
+  listProjects,
+  callMcpTool,
+  authWithServer,
+  sendHeartbeat,
+  releaseServerSession,
+  getKnowledgeGraph,
+  searchKnowledgeGraph,
+  openKnowledgeNodes,
+  createKnowledgeEntities,
+  createKnowledgeRelations,
+  searchCode,
+  findSymbol,
+  getFileOutline,
+  reindexCode,
+  type ProjectSummary,
+} from "./api.js";
 import { downloadSkills } from "./skills.js";
 import { createSessionDisk } from "./sessiondisk.js";
 import { registerMcpConfig } from "./mcp-config.js";
@@ -30,6 +48,11 @@ Usage:
   connector-cli tab attach <name|id>       Lihat output real-time tab
   connector-cli tab kill <name|id>         Hentikan tab yang sedang berjalan
   connector-cli tab clean                  Bersihkan tab-tab yang sudah selesai/exited
+  connector-cli memory [graph|search|node|learn|relate] Akses Knowledge Graph permanen MCP
+  connector-cli code <query>               Pencarian kode instan seperti Cursor
+  connector-cli symbol <name>              Cari definisi simbol fungsi/class/interface
+  connector-cli outline <file>             Outline hierarki simbol file
+  connector-cli reindex                    Trigger re-index codebase project di VPS
   connector-cli setting                    Konfigurasi link server & API key
   connector-cli status                     Cek status koneksi VPS
   connector-cli help                       Tampilkan bantuan ini
@@ -495,6 +518,202 @@ async function cmdVpsExec(args: string[]): Promise<void> {
   }
 }
 
+async function cmdMemory(action?: string, args: string[] = []): Promise<void> {
+  const cfg = loadCliConfig();
+  const project = "smoke-app";
+
+  if (!action || action === "graph") {
+    console.log(`\n⏳ Mengambil Knowledge Graph project '${project}' dari VPS...`);
+    const g = await getKnowledgeGraph(cfg, project);
+    console.log(`\n🧠 KNOWLEDGE GRAPH: ${g.entities.length} entitas, ${g.relations.length} relasi`);
+    for (const e of g.entities) {
+      console.log(`  • [${e.entityType}] ${e.name} (${e.observations.length} obs):`);
+      for (const obs of e.observations) {
+        console.log(`      - ${obs}`);
+      }
+    }
+    if (g.relations.length > 0) {
+      console.log("  🔗 Relasi:");
+      for (const r of g.relations) {
+        console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+      }
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "search") {
+    const q = args.join(" ").trim();
+    if (!q) {
+      console.log("Usage: connector-cli memory search <query>");
+      return;
+    }
+    console.log(`\n🔍 Mencari Knowledge Graph untuk: "${q}"...`);
+    const res = await searchKnowledgeGraph(cfg, project, q);
+    console.log(`Ditemukan ${res.entities.length} entitas terkait:`);
+    for (const e of res.entities) {
+      console.log(`  • [${e.entityType}] ${e.name}:`);
+      for (const obs of e.observations) {
+        console.log(`      - ${obs}`);
+      }
+    }
+    if (res.relations.length > 0) {
+      console.log("  🔗 Relasi terhubung:");
+      for (const r of res.relations) {
+        console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+      }
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "node") {
+    const name = args[0]?.trim();
+    if (!name) {
+      console.log("Usage: connector-cli memory node <name>");
+      return;
+    }
+    console.log(`\n📖 Mengambil sub-graph untuk entitas: "${name}"...`);
+    const res = await openKnowledgeNodes(cfg, project, [name]);
+    for (const e of res.entities) {
+      console.log(`  • [${e.entityType}] ${e.name}:`);
+      for (const obs of e.observations) {
+        console.log(`      - ${obs}`);
+      }
+    }
+    if (res.relations.length > 0) {
+      console.log("  🔗 Relasi terhubung:");
+      for (const r of res.relations) {
+        console.log(`      - ${r.from} --(${r.relationType})--> ${r.to}`);
+      }
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "learn") {
+    const [name, type, ...obsWords] = args;
+    const obs = obsWords.join(" ").trim();
+    if (!name || !type || !obs) {
+      console.log("Usage: connector-cli memory learn <entity> <type> <observasi>");
+      return;
+    }
+    console.log(`\n📝 Menyimpan observasi atomik ke graph: [${type}] ${name}...`);
+    await createKnowledgeEntities(cfg, project, [{ name, entityType: type, observations: [obs] }]);
+    console.log(`✓ Observasi permanen tercatat di Knowledge Graph: "${obs}"\n`);
+    return;
+  }
+
+  if (action === "relate") {
+    const [from, relType, to] = args;
+    if (!from || !relType || !to) {
+      console.log("Usage: connector-cli memory relate <from> <type> <to>");
+      return;
+    }
+    console.log(`\n🔗 Menghubungkan relasi: ${from} --(${relType})--> ${to}...`);
+    await createKnowledgeRelations(cfg, project, [{ from, to, relationType: relType }]);
+    console.log(`✓ Relasi berhasil dicatat di Knowledge Graph.\n`);
+    return;
+  }
+
+  console.log(`Aksi memory '${action}' tidak dikenal. Tersedia: graph, search, node, learn, relate\n`);
+}
+
+async function cmdCode(action?: string, args: string[] = []): Promise<void> {
+  const cfg = loadCliConfig();
+  const project = "smoke-app";
+
+  if (!action || action === "search") {
+    const q = args.join(" ").trim();
+    if (!q) {
+      console.log("Usage: connector-cli code search <query>");
+      return;
+    }
+    console.log(`\n⚡ Pencarian kode cepat ala Cursor untuk: "${q}"...`);
+    const matches = await searchCode(cfg, project, q, 15);
+    if (matches.length === 0) {
+      console.log("Tidak ada kecocokan kode.\n");
+      return;
+    }
+    console.log(`Ditemukan ${matches.length} baris/simbol kode:`);
+    for (const m of matches) {
+      const kindBadge = m.kind ? `[${m.kind}] ` : "";
+      console.log(`  • ${m.file}:${m.line} ${kindBadge}(score: ${m.score})`);
+      console.log(`      ${m.preview}`);
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "symbol") {
+    const name = args.join(" ").trim();
+    if (!name) {
+      console.log("Usage: connector-cli code symbol <name>");
+      return;
+    }
+    console.log(`\n🔍 Mencari definisi simbol: "${name}"...`);
+    const symbols = await findSymbol(cfg, project, name);
+    if (symbols.length === 0) {
+      console.log("Simbol tidak ditemukan di codebase.\n");
+      return;
+    }
+    console.log(`Ditemukan ${symbols.length} deklarasi simbol:`);
+    for (const s of symbols) {
+      console.log(`  • [${s.kind}] ${s.name} di ${s.file}:${s.line}`);
+      console.log(`      ${s.signature}`);
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "outline") {
+    const file = args[0]?.trim();
+    if (!file) {
+      console.log("Usage: connector-cli code outline <file>");
+      return;
+    }
+    console.log(`\n📑 Mengambil outline simbol file: "${file}"...`);
+    const symbols = await getFileOutline(cfg, project, file);
+    if (symbols.length === 0) {
+      console.log("Tidak ada simbol ditemukan atau file belum terindeks.\n");
+      return;
+    }
+    console.log(`Outline ${file} (${symbols.length} simbol):`);
+    for (const s of symbols) {
+      console.log(`  • Line ${String(s.line).padEnd(4)} [${s.kind.padEnd(9)}] ${s.name}: ${s.signature}`);
+    }
+    console.log();
+    return;
+  }
+
+  if (action === "reindex") {
+    console.log(`\n⏳ Memindai ulang codebase project '${project}' di VPS...`);
+    const res = await reindexCode(cfg, project);
+    if (res.success) {
+      console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
+    } else {
+      console.log("Gagal melakukan re-index.\n");
+    }
+    return;
+  }
+
+  // Fallback: search with full query
+  const q = [action, ...args].join(" ").trim();
+  console.log(`\n⚡ Pencarian kode cepat ala Cursor untuk: "${q}"...`);
+  const matches = await searchCode(cfg, project, q, 15);
+  if (matches.length === 0) {
+    console.log("Tidak ada kecocokan kode.\n");
+    return;
+  }
+  console.log(`Ditemukan ${matches.length} baris/simbol kode:`);
+  for (const m of matches) {
+    const kindBadge = m.kind ? `[${m.kind}] ` : "";
+    console.log(`  • ${m.file}:${m.line} ${kindBadge}(score: ${m.score})`);
+    console.log(`      ${m.preview}`);
+  }
+  console.log();
+}
+
 async function main(argv: string[]): Promise<void> {
   const cleanArgv = argv.map((a) => a.trim().replace(/\r/g, ""));
   const [command, sub, ...rest] = cleanArgv;
@@ -520,6 +739,16 @@ async function main(argv: string[]): Promise<void> {
     case "tab":
     case "task":
       return cmdTab(sub, rest);
+    case "memory":
+      return cmdMemory(sub, rest);
+    case "code":
+      return cmdCode(sub, rest);
+    case "symbol":
+      return cmdCode("symbol", [sub, ...rest].filter(Boolean));
+    case "outline":
+      return cmdCode("outline", [sub, ...rest].filter(Boolean));
+    case "reindex":
+      return cmdCode("reindex", []);
     case "setting":
     case "settings":
       return cmdSetting();
