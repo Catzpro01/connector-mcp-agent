@@ -53,6 +53,8 @@ Usage:
   connector-cli symbol <name>              Cari definisi simbol fungsi/class/interface
   connector-cli outline <file>             Outline hierarki simbol file
   connector-cli reindex                    Trigger re-index codebase project di VPS
+  connector-cli login [nama]               Ganti identitas agen atau login sebagai agen lain
+  connector-cli logout                     Lepas sesi aktif dan keluar dari akun agen saat ini
   connector-cli setting                    Konfigurasi link server & API key
   connector-cli status                     Cek status koneksi VPS
   connector-cli help                       Tampilkan bantuan ini
@@ -714,6 +716,55 @@ async function cmdCode(action?: string, args: string[] = []): Promise<void> {
   console.log();
 }
 
+async function cmdLogin(newName?: string): Promise<void> {
+  const cfg = loadCliConfig();
+  let name = newName?.trim();
+  if (!name) {
+    name = await promptAgentName();
+  }
+
+  const stored = readStoredConfig();
+  if (stored.agentName && stored.agentName.toLowerCase() !== name.toLowerCase()) {
+    const oldToken = readStoredSessionToken(stored.agentName);
+    if (oldToken) {
+      await releaseServerSession(cfg, stored.agentName, oldToken);
+      saveStoredSessionToken(stored.agentName, undefined);
+    }
+  }
+
+  console.log(`\n⏳ Mengautentikasi agen '${name}' ke server VPS...`);
+  const authRes = await authWithServer(cfg, name);
+  if (!authRes.success) {
+    console.error(`\n\x1b[31m❌ Akses Ditolak: ${authRes.error}\x1b[0m\n`);
+    process.exit(1);
+  }
+
+  saveAgentName(name);
+  if (authRes.token) {
+    saveStoredSessionToken(name, authRes.token);
+  }
+  console.log(`\n\x1b[1;32m✓ Berhasil login sebagai agen '${name}'.\x1b[0m`);
+  console.log(`Ketik 'connector-cli' untuk membuka menu utama.\n`);
+}
+
+async function cmdLogout(): Promise<void> {
+  const cfg = loadCliConfig();
+  const stored = readStoredConfig();
+  if (stored.agentName) {
+    const oldToken = readStoredSessionToken(stored.agentName);
+    if (oldToken) {
+      await releaseServerSession(cfg, stored.agentName, oldToken);
+    }
+    const oldName = stored.agentName;
+    saveAgentName("");
+    saveStoredSessionToken(oldName, undefined);
+    console.log(`\n✓ Sesi agen '${oldName}' telah dibebaskan dan di-logout.`);
+  } else {
+    console.log("\nTidak ada agen yang sedang login.");
+  }
+  console.log("Saat membuka 'connector-cli', sistem akan menanyakan nama agen baru.\n");
+}
+
 async function main(argv: string[]): Promise<void> {
   const cleanArgv = argv.map((a) => a.trim().replace(/\r/g, ""));
   const [command, sub, ...rest] = cleanArgv;
@@ -722,6 +773,10 @@ async function main(argv: string[]): Promise<void> {
       return interactiveMenu();
     case "menu":
       return interactiveMenu();
+    case "login":
+      return cmdLogin(sub);
+    case "logout":
+      return cmdLogout();
     case "list":
       return cmdList();
     case "latest":
