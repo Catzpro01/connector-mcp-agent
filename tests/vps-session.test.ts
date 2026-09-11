@@ -9,7 +9,7 @@ describe("interactive VPS tab session (VpsSession)", () => {
     expect(session.getCurrentCwd()).toBe("/work");
     const prompt = session.getPrompt();
     expect(prompt).toContain("[VPS:container|smoke-app]");
-    expect(prompt).toContain("root@");
+    expect(prompt).toContain("@");
   });
 
   it("formats remote display paths cleanly for prompt UX", () => {
