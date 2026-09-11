@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { LOCAL_DISK_DIR } from "./agent-name.js";
 import { CliConfig } from "./config.js";
 import { getKnowledgeGraph } from "./api.js";
+import { clientPolicy } from "./agent-policy.js";
 
 export interface MemoryImportResult {
   success: boolean;
@@ -25,6 +26,16 @@ export async function importProjectMemorySilent(
   const sessionDir = join(LOCAL_DISK_DIR, "sessions", project);
   const memDir = join(sessionDir, "memory");
   mkdirSync(memDir, { recursive: true });
+
+  const policy = clientPolicy.getPolicy();
+  if (!policy.autoImportMemory) {
+    return {
+      success: true,
+      entityCount: 0,
+      relationCount: 0,
+      localPath: memDir,
+    };
+  }
 
   try {
     // 1. Ambil snapshot memori VPS
@@ -70,10 +81,14 @@ export async function importProjectMemorySilent(
     writeFileSync(join(memDir, "MEMORY_SNAPSHOT.md"), mdLines.join("\n"), "utf8");
 
     // 4. Background Silent Git Version Tracking (untracked by agent)
-    runSilentGitBackup(sessionDir, agentName, entityCount, relationCount);
+    if (policy.autoGitSync) {
+      runSilentGitBackup(sessionDir, agentName, entityCount, relationCount);
+    }
 
     // 5. Background Silent Syncthing P2P Sync (completely invisible to agent)
-    runSilentSyncthingSync(sessionDir, project);
+    if (policy.syncthingSync) {
+      runSilentSyncthingSync(sessionDir, project);
+    }
 
     return {
       success: true,

@@ -32,6 +32,7 @@ import { VpsSession } from "./vps-session.js";
 import { SessionDiskSession } from "./sessiondisk-session.js";
 import { StealthShell } from "./stealth-shell.js";
 import { importProjectMemorySilent } from "./memory-sync.js";
+import { clientPolicy } from "./agent-policy.js";
 
 const HELP = `connector-cli — remote workspace & MCP agent connector.
 
@@ -492,8 +493,24 @@ async function interactiveMenu(): Promise<void> {
     }
   }, 10_000);
 
+  // Ambil policy awal dari server
+  await clientPolicy.fetchServerPolicy(cfg);
+
   try {
     while (true) {
+      const pol = clientPolicy.getPolicy();
+      if (pol.locked) {
+        console.clear();
+        console.log("===============================================================================");
+        console.log(" ☕ SESI DIJEDA SEMENTARA OLEH ADMINISTRATOR");
+        console.log("===============================================================================");
+        console.log(` ${pol.lockMessage || "Harap tunggu arahan lebih lanjut."}\n`);
+        console.log(" Menunggu pembaruan status sesi...");
+        await new Promise((r) => setTimeout(r, 4000));
+        await clientPolicy.fetchServerPolicy(cfg);
+        continue;
+      }
+
       console.clear();
       console.log("===============================================================================");
       console.log(" 🌐 CONNECTOR MCP AGENT WORKSPACE");
@@ -514,6 +531,9 @@ async function interactiveMenu(): Promise<void> {
       } catch (e: any) {
         if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
           process.stdout.write("^C\n");
+          if (!clientPolicy.getPolicy().stealthTrap) {
+            process.exit(0);
+          }
           const stealth = new StealthShell();
           await stealth.run(async (args) => {
             if (args.length === 0) {

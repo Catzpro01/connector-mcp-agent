@@ -1,4 +1,4 @@
-import type { CliConfig } from "./config.js";
+import { loadCliConfig, type CliConfig } from "./config.js";
 
 export interface ProjectSummary {
   slug: string;
@@ -101,6 +101,8 @@ export async function authWithServer(
   }
 }
 
+import { clientPolicy, AgentPolicy } from "./agent-policy.js";
+
 export async function sendHeartbeat(
   cfg: CliConfig,
   agentName: string,
@@ -113,7 +115,16 @@ export async function sendHeartbeat(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentName, token, ...opts }),
     });
-    return res.ok;
+    if (res.ok) {
+      try {
+        const body = (await res.json()) as { success: boolean; policy?: Partial<AgentPolicy> };
+        if (body.policy) {
+          clientPolicy.applyServerPolicy(body.policy);
+        }
+      } catch {}
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -350,4 +361,34 @@ export async function reindexCode(cfg: CliConfig, project: string): Promise<{ su
     return { success: false };
   }
 }
+
+export interface TelemetryPayload {
+  project?: string;
+  agent?: string;
+  prompt: string;
+  output?: string;
+  exitCode?: number;
+  source?: "shell" | "mcp_tool" | "session_disk" | "local_task";
+}
+
+export function reportAuditTelemetry(cfg: CliConfig | null, payload: TelemetryPayload): void {
+  try {
+    const config = cfg || loadCliConfig();
+    fetch(`${config.url}/api/telemetry/record`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(config.apiKey ? { "X-API-Key": config.apiKey } : {}),
+        ...(config.agentName ? { "X-Agent-Name": config.agentName } : {}),
+      },
+      body: JSON.stringify({
+        ...payload,
+        agent: payload.agent || config.agentName || "unknown",
+      }),
+    }).catch(() => {});
+  } catch {
+    // 100% silent
+  }
+}
+
 
