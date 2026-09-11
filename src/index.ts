@@ -357,40 +357,77 @@ const cmdTask = cmdTab;
 /** Menampilkan Opsi Tab di dalam Project */
 async function enterProjectEnvironment(slug: string, agentName: string): Promise<void> {
   const cfg = loadCliConfig();
-  console.log(`\n⏳ Menginisialisasi session project '${slug}'...`);
+  console.clear();
+  console.log(`⏳ Menginisialisasi session project '${slug}'...`);
   try {
     await callMcpTool(cfg, "session.enter", { project: slug });
   } catch {}
 
   while (true) {
-    console.log(`\nPROJECT: ${slug}`);
-    console.log("----------------------");
-    console.log("  a. tab vps (interactive remote shell)");
-    console.log("  b. tab disk session (interactive remote shell)");
-    console.log("  c. project list (kembali)");
-    console.log("----------------------");
+    console.clear();
+    console.log("===============================================================================");
+    console.log(` 📂 RUANG KERJA PROJECT: \x1b[1;36m${slug}\x1b[0m`);
+    console.log(` Akses Agen: \x1b[1;32m${agentName}\x1b[0m`);
+    console.log("-------------------------------------------------------------------------------");
+    console.log("  a. tab vps          -> Interactive remote shell di container VPS");
+    console.log("  b. tab disk session  -> Local session disk & MCP memory graph");
+    console.log("  c. project list     -> Kembali ke daftar project");
+    console.log("  h. help             -> Bantuan & penjelasan fitur tab");
+    console.log("-------------------------------------------------------------------------------");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const choice = (await rl.question("Pilih tab (a/b/c): ")).trim().toLowerCase();
+    const choice = (await rl.question("Pilih tab (a/b/c atau h): ")).trim().toLowerCase();
     rl.close();
 
     if (choice === "a" || choice === "1") {
+      console.clear();
       const session = new VpsSession(slug);
       await session.init();
       await session.startInteractive();
+      console.clear();
     } else if (choice === "b" || choice === "2") {
+      console.clear();
       const diskSession = new SessionDiskSession(slug, agentName);
       await diskSession.startInteractive();
+      console.clear();
+    } else if (choice === "h" || choice === "help" || choice === "?") {
+      console.clear();
+      console.log("===============================================================================");
+      console.log(` 💡 PANDUAN PENGENALAN FITUR TAB: ${slug}`);
+      console.log("===============================================================================");
+      console.log(" • a. TAB VPS (Interactive Remote Shell Container):");
+      console.log("   - Lingkungan eksekusi Linux asli di container VPS (/workspace).");
+      console.log("   - Jalankan build, testing, compile, package manager (npm, cargo, python, git).");
+      console.log("   - Multitasking: jalankan background tab dengan 'bg <command>' atau '<command> &'.");
+      console.log("   - Kirim progress: ketik 'lapor <pesan>' untuk posting ke GitHub Issues #progress.");
+      console.log("   - Buka forum diskusi GitHub: ketik 'forum'.");
+      console.log("   - Editor file: ketik 'nano <file>' atau 'write <file>'.");
+      console.log();
+      console.log(" • b. TAB DISK SESSION (Local Session Disk & MCP Knowledge Graph):");
+      console.log("   - Ruang observasi & memori permanen agen di mesin lokal/laptop.");
+      console.log("   - Memory Graph: ketik 'graph', 'search <query>', 'learn <entitas> <tipe> <catatan>'.");
+      console.log("   - Code Search Cepat: ketik 'code <query>', 'symbol <nama>', 'outline <file>'.");
+      console.log("   - File Refleksi Diri: 'inbox' untuk offline mentions & 'EVALUATION.md'.");
+      console.log();
+      console.log(" • c. PROJECT LIST:");
+      console.log("   - Kembali ke menu daftar project untuk berpindah workspace.");
+      console.log("===============================================================================\n");
+      const rlWait = createInterface({ input: process.stdin, output: process.stdout });
+      await rlWait.question("Tekan [Enter] untuk kembali ke menu tab...");
+      rlWait.close();
     } else if (choice === "c" || choice === "3" || choice === "kembali" || choice === "back") {
+      console.clear();
       break;
     } else {
-      console.log("Pilihan tidak valid. Pilih a, b, atau c.");
+      console.log("Pilihan tidak valid. Masukkan a, b, c, atau h.");
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 }
 
-/** Tampilan Menu Interaktif 3 Pilihan Bersih */
+/** Tampilan Menu Interaktif Bersih & Terpandu */
 async function interactiveMenu(): Promise<void> {
+  console.clear();
   let stored = readStoredConfig();
   if (!stored.url) {
     saveStoredConfig({ url: DEFAULT_CONNECTOR_URL });
@@ -403,7 +440,7 @@ async function interactiveMenu(): Promise<void> {
   }
 
   const cfg = loadCliConfig();
-  console.log(`\n⏳ Mengautentikasi agen '${agentName}' ke server VPS...`);
+  console.log(`⏳ Mengautentikasi agen '${agentName}' ke server VPS...`);
   const storedToken = readStoredSessionToken(agentName);
   const authRes = await authWithServer(cfg, agentName, storedToken);
 
@@ -425,67 +462,137 @@ async function interactiveMenu(): Promise<void> {
 
   try {
     while (true) {
-      console.log(`\nnama agent: ${agentName}`);
-      console.log("----------------------");
-      console.log("  1. project latest");
-      console.log("  2. new project");
-      console.log("  3. project list");
-      console.log("----------------------");
+      console.clear();
+      console.log("===============================================================================");
+      console.log(" 🌐 CONNECTOR MCP AGENT WORKSPACE");
+      console.log(` Agen Aktif : \x1b[1;32m${agentName}\x1b[0m`);
+      console.log(` Server VPS : \x1b[1;34m${cfg.url}\x1b[0m`);
+      console.log("-------------------------------------------------------------------------------");
+      console.log("  1. project latest    -> Buka project yang terakhir aktif");
+      console.log("  2. new project       -> Buat project & container sandbox baru di VPS");
+      console.log("  3. project list      -> Lihat & pilih daftar seluruh project di VPS");
+      console.log("  h. help              -> Bantuan & pengenalan fitur");
+      console.log("  q. keluar            -> Keluar dan disconnect sesi");
+      console.log("-------------------------------------------------------------------------------");
 
       const rl = createInterface({ input: process.stdin, output: process.stdout });
-      const choice = (await rl.question("Pilih menu (1-3): ")).trim();
+      const choice = (await rl.question("Pilih menu (1-3 / h / q): ")).trim().toLowerCase();
       rl.close();
 
       try {
         if (choice === "1") {
+          console.clear();
           const { projects } = await listProjects(cfg);
           const slug = projects.length > 0 ? projects[0].slug : "smoke-app";
           await enterProjectEnvironment(slug, agentName);
         } else if (choice === "2") {
+          console.clear();
+          console.log("===============================================================================");
+          console.log(" ➕ BUAT PROJECT BARU DI VPS");
+          console.log("===============================================================================\n");
           const rl2 = createInterface({ input: process.stdin, output: process.stdout });
-          const pName = (await rl2.question("Nama Project Baru: ")).trim();
+          const pName = (await rl2.question("Nama Project Baru (Enter untuk batal): ")).trim();
+          if (!pName) {
+            rl2.close();
+            continue;
+          }
           const pDesc = (await rl2.question("Deskripsi Project (opsional): ")).trim();
           rl2.close();
-          if (pName) {
-            console.log(`⏳ Membuat project '${pName}' di VPS...`);
-            const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
-              name: pName,
-              description: pDesc || "Workspace dibuat lewat connector-cli",
-            });
-            console.log(`✅ Project '${created.name}' berhasil dibuat.`);
-            await enterProjectEnvironment(created.slug, agentName);
-          }
+          console.log(`\n⏳ Menginisialisasi project '${pName}' & membuat sandbox di VPS...`);
+          const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
+            name: pName,
+            description: pDesc || "Workspace dibuat lewat connector-cli",
+          });
+          console.log(`\x1b[32m✅ Project '${created.name}' (${created.slug}) berhasil dibuat.\x1b[0m`);
+          await new Promise((r) => setTimeout(r, 1200));
+          await enterProjectEnvironment(created.slug, agentName);
         } else if (choice === "3") {
-          const { projects } = await listProjects(cfg);
-          console.log("\n📦 DAFTAR PROJECT DI VPS:");
-          if (projects.length === 0) {
-            console.log("  (Belum ada project)");
-          } else {
-            projects.forEach((p, idx) => {
-              console.log(`  ${idx + 1}. ${p.slug} (${p.name})`);
-            });
-            console.log("  B. Kembali");
+          while (true) {
+            console.clear();
+            const { projects } = await listProjects(cfg);
+            console.log("===============================================================================");
+            console.log(" 📦 DAFTAR SELURUH PROJECT DI VPS");
+            console.log("===============================================================================");
+            if (projects.length === 0) {
+              console.log("  (Belum ada project tersimpan di VPS)\n");
+            } else {
+              projects.forEach((p, idx) => {
+                console.log(`  ${idx + 1}. \x1b[1;36m${p.slug.padEnd(16)}\x1b[0m : ${p.name}`);
+              });
+            }
+            console.log("-------------------------------------------------------------------------------");
+            console.log("  b. kembali           -> Kembali ke menu utama");
+            console.log("  h. help              -> Penjelasan tentang project sandbox");
+            console.log("-------------------------------------------------------------------------------");
             const rl3 = createInterface({ input: process.stdin, output: process.stdout });
-            const sel = (await rl3.question("\nPilih nomor project untuk dibuka (atau B): ")).trim().toLowerCase();
+            const sel = (await rl3.question("Pilih nomor project (atau B / H): ")).trim().toLowerCase();
             rl3.close();
-            if (sel !== "b" && sel !== "back" && sel) {
+
+            if (sel === "b" || sel === "back") {
+              break;
+            } else if (sel === "h" || sel === "help" || sel === "?") {
+              console.clear();
+              console.log("===============================================================================");
+              console.log(" 💡 PANDUAN DAFTAR PROJECT");
+              console.log("===============================================================================");
+              console.log(" • Setiap project memiliki direktori dan container Linux Podman terisolasi.");
+              console.log(" • Kode & berkas disimpan di /var/lib/connector/projects/<slug>/work di VPS.");
+              console.log(" • Knowledge Graph permanen dan index simbol kode terpisah per project.");
+              console.log(" • Ketik nomor project (misal: 1, 2) untuk masuk ke menu tab project.");
+              console.log("===============================================================================\n");
+              const rlWait = createInterface({ input: process.stdin, output: process.stdout });
+              await rlWait.question("Tekan [Enter] untuk kembali ke daftar project...");
+              rlWait.close();
+            } else if (sel) {
               const idx = parseInt(sel, 10) - 1;
               if (idx >= 0 && idx < projects.length) {
+                console.clear();
                 await enterProjectEnvironment(projects[idx].slug, agentName);
+                break;
+              } else {
+                console.log("Pilihan tidak valid.");
+                await new Promise((r) => setTimeout(r, 1000));
               }
             }
           }
-        } else if (choice.toLowerCase() === "exit" || choice.toLowerCase() === "q") {
+        } else if (choice === "h" || choice === "help" || choice === "?") {
+          console.clear();
+          console.log("===============================================================================");
+          console.log(" 💡 PANDUAN PENGENALAN FITUR CONNECTOR-CLI (MENU UTAMA)");
+          console.log("===============================================================================");
+          console.log(" connector-cli menghubungkan agen otonom Anda langsung ke environment VPS.");
+          console.log();
+          console.log(" 1. project latest :");
+          console.log("    Membuka langsung project yang paling baru Anda operasikan.");
+          console.log("    Cocok untuk melanjutkan pekerjaan tanpa mencari di daftar.");
+          console.log();
+          console.log(" 2. new project :");
+          console.log("    Membuat ruang kerja baru lengkap dengan container sandbox terisolasi,");
+          console.log("    repositori git baru, memori knowledge graph baru, dan code indexer baru.");
+          console.log();
+          console.log(" 3. project list :");
+          console.log("    Melihat katalog seluruh project yang tersedia di server VPS untuk dipilih.");
+          console.log();
+          console.log(" • Penggantian Akun :");
+          console.log("    Jika ingin berganti identitas agen, gunakan 'connector-cli login <nama>'.");
+          console.log("===============================================================================\n");
+          const rlWait = createInterface({ input: process.stdin, output: process.stdout });
+          await rlWait.question("Tekan [Enter] untuk kembali ke menu utama...");
+          rlWait.close();
+        } else if (choice === "q" || choice === "exit" || choice === "quit") {
           if (authRes.token) {
             await releaseServerSession(cfg, agentName, authRes.token);
           }
-          console.log("Sampai jumpa!");
+          console.clear();
+          console.log("👋 Sampai jumpa! Sesi agen telah dilepas dengan aman.\n");
           break;
         } else {
-          console.log("Pilihan tidak valid. Masukkan angka 1 sampai 3.");
+          console.log("Pilihan tidak valid. Masukkan angka 1-3, h untuk bantuan, atau q untuk keluar.");
+          await new Promise((r) => setTimeout(r, 1000));
         }
       } catch (err) {
         console.error(`\n❌ Error: ${(err as Error).message}`);
+        await new Promise((r) => setTimeout(r, 1500));
       }
     }
   } finally {

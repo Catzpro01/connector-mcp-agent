@@ -48,12 +48,14 @@ export class SessionDiskSession {
 
   async startInteractive(): Promise<void> {
     const cfg = loadCliConfig();
-    console.log("\n===============================================================================");
+    console.clear();
+    console.log("===============================================================================");
     console.log(` 💾 TAB DISK SESSION — ${this.project} (Local Session Disk & MCP Memory)`);
     console.log(` Direktori Lokal: ${this.sessionDir}`);
     console.log(" • File Lokal   : ls, cd, cat, write, inbox, clear, exit");
     console.log(" • Memory Graph : graph, search <query>, node <name>, learn <entity> <type> <obs>, relate <from> <type> <to>");
     console.log(" • Cursor Index : code <query>, symbol <name>, outline <file>, reindex");
+    console.log(" • Bantuan      : ketik 'help' kapan saja untuk penjelasan fitur");
     console.log("===============================================================================\n");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -62,6 +64,28 @@ export class SessionDiskSession {
       while (true) {
         const input = (await rl.question(this.getPrompt())).trim();
         if (!input) continue;
+
+        if (input === "help" || input === "?") {
+          console.log("\n======================== BANTUAN TAB DISK SESSION ========================");
+          console.log(" Anda berada di Tab Disk Session (Local Session Disk & MCP Memory).");
+          console.log(" Perintah File Lokal:");
+          console.log("   ls, pwd, cd <dir>, cat <file>, write <file>");
+          console.log("   inbox                                -> Lihat pesan/mention offline tim");
+          console.log("\n Akses Knowledge Graph MCP:");
+          console.log("   graph                                -> Tampilkan seluruh Knowledge Graph");
+          console.log("   search <query>                       -> Cari entitas & relasi di graph");
+          console.log("   node <nama>                          -> Buka detail sub-graph entitas");
+          console.log("   learn <entitas> <tipe> <catatan>     -> Rekam fakta permanen baru");
+          console.log("   relate <dari> <tipe_relasi> <ke>     -> Hubungkan relasi antar entitas");
+          console.log("\n Cursor-Style Code Indexer:");
+          console.log("   code <query>                         -> Cari baris & simbol kode secepat Cursor");
+          console.log("   symbol <nama>                        -> Temukan definisi fungsi / class / struct");
+          console.log("   outline <file>                       -> Lihat susunan simbol suatu file");
+          console.log("   reindex                              -> Re-index codebase project di VPS");
+          console.log("\n   exit                                 -> Kembali ke menu project");
+          console.log("==========================================================================\n");
+          continue;
+        }
 
         if (input === "exit" || input === "quit") {
           console.log("\n👋 Keluar dari Tab Disk Session. Kembali ke menu project.\n");

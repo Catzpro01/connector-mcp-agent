@@ -427,21 +427,22 @@ export class VpsSession {
 
   async startInteractive(): Promise<void> {
     await this.init();
-    console.log("\n===============================================================================");
+    console.clear();
+    console.log("===============================================================================");
     console.log(" 🌐 REMOTE VPS CONTAINER SESSION — PURE HTTP STREAMABLE MCP (NO SSH)");
     console.log(` Host / Sandbox : ${this.host} (Terisolasi di Container)`);
     console.log(` Akses Akun     : ${this.user} (Root Project Sandbox)`);
     console.log(` Project Folder : /work (Bind mount ke host /var/lib/connector/projects/${this.project})`);
     console.log("-------------------------------------------------------------------------------");
-    console.log(" 💡 Navigasi Multi-Tab & Aturan Lifecycle:");
+    console.log(" 💡 Navigasi Cepat & Fitur:");
+    console.log("   • 'help'                    -> Panduan lengkap seluruh perintah di tab VPS");
     console.log("   • 'tabs'                    -> Lihat daftar seluruh tab live");
     console.log("   • 'switch <name|id>'        -> Cek / pindah ke tab lain untuk melihat output");
     console.log("   • 'prev'                    -> Cepat kembali ke tab sebelumnya yang dicek");
-    console.log("   • 'close <name|id>'         -> Tutup tab yang sudah selesai (patuhi aturan)");
-    console.log("   • 'clean'                   -> Bersihkan semua tab yang sudah selesai");
+    console.log("   • 'close <name|id>'         -> Tutup tab yang sudah selesai");
     console.log("   • 'bg <cmd>' atau '<cmd> &' -> Buka tab background baru di container");
-    console.log("   • 'nano <file>' / 'write'   -> Tulis / edit file di container secara interaktif");
-    console.log("   • 'exit' atau 'quit'        -> Keluar dan kembali ke menu lokal");
+    console.log("   • 'nano <file>' / 'write'   -> Tulis / edit file di container");
+    console.log("   • 'exit' atau 'quit'        -> Keluar dan kembali ke menu project");
     console.log("===============================================================================\n");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
