@@ -6,6 +6,7 @@ export interface CliConfig {
   url: string;
   apiKey?: string;
   agentName?: string;
+  defaultProject?: string;
 }
 
 export function loadCliConfig(env: NodeJS.ProcessEnv = process.env, configDir?: string): CliConfig {
@@ -24,6 +25,7 @@ export function loadCliConfig(env: NodeJS.ProcessEnv = process.env, configDir?: 
     url: url.replace(/\/+$/, ""),
     apiKey,
     agentName: env.CONNECTOR_AGENT?.trim() || readStoredAgentName(configDir) || "agent",
+    defaultProject: env.CONNECTOR_PROJECT?.trim() || stored.defaultProject || "smoke-app",
   };
 }
 

@@ -749,14 +749,33 @@ async function interactiveMenu(): Promise<void> {
   }
 }
 
+function extractProjectFlag(args: string[], defaultProj: string = "smoke-app"): { project: string; cleanArgs: string[] } {
+  let project = defaultProj;
+  const cleanArgs: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--project" || args[i] === "-p") {
+      if (i + 1 < args.length) {
+        project = args[i + 1];
+        i++;
+      }
+    } else if (args[i].startsWith("--project=")) {
+      project = args[i].slice("--project=".length);
+    } else {
+      cleanArgs.push(args[i]);
+    }
+  }
+  return { project, cleanArgs };
+}
+
 async function cmdVpsExec(args: string[]): Promise<void> {
-  const remoteCmd = args.join(" ").trim();
+  const cfg = loadCliConfig();
+  const { project, cleanArgs } = extractProjectFlag(args, cfg.defaultProject || "smoke-app");
+  const remoteCmd = cleanArgs.join(" ").trim();
   if (!remoteCmd) {
-    const session = new VpsSession("smoke-app");
+    const session = new VpsSession(project);
     return session.startInteractive();
   }
-  const cfg = loadCliConfig();
-  console.log(`\x1b[1;36m[VPS: master | smoke-app]\x1b[0m \x1b[1;32mfern@master\x1b[0m: \x1b[1m${remoteCmd}\x1b[0m\n`);
+  console.log(`\x1b[1;36m[VPS: master | ${project}]\x1b[0m \x1b[1;32mfern@master\x1b[0m: \x1b[1m${remoteCmd}\x1b[0m\n`);
 
   interface ExecResponse {
     exit: number;
@@ -765,7 +784,7 @@ async function cmdVpsExec(args: string[]): Promise<void> {
   }
 
   const res = await callMcpTool<ExecResponse>(cfg, "exec.run", {
-    project: "smoke-app",
+    project,
     command: remoteCmd,
   });
 
@@ -776,9 +795,9 @@ async function cmdVpsExec(args: string[]): Promise<void> {
   }
 }
 
-async function cmdMemory(action?: string, args: string[] = []): Promise<void> {
+async function cmdMemory(action?: string, rawArgs: string[] = []): Promise<void> {
   const cfg = loadCliConfig();
-  const project = "smoke-app";
+  const { project, cleanArgs: args } = extractProjectFlag(rawArgs, cfg.defaultProject || "smoke-app");
 
   if (!action || action === "graph") {
     console.log(`\n⏳ Mengambil Knowledge Graph project '${project}' dari VPS...`);
@@ -877,9 +896,9 @@ async function cmdMemory(action?: string, args: string[] = []): Promise<void> {
   console.log(`Aksi memory '${action}' tidak dikenal. Tersedia: graph, search, node, learn, relate\n`);
 }
 
-async function cmdCode(action?: string, args: string[] = []): Promise<void> {
+async function cmdCode(action?: string, rawArgs: string[] = []): Promise<void> {
   const cfg = loadCliConfig();
-  const project = "smoke-app";
+  const { project, cleanArgs: args } = extractProjectFlag(rawArgs, cfg.defaultProject || "smoke-app");
 
   if (!action || action === "search") {
     const q = args.join(" ").trim();

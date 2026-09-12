@@ -13,6 +13,7 @@ export interface StoredConfig {
   agentName?: string;
   url?: string;
   apiKey?: string;
+  defaultProject?: string;
 }
 
 export function localDiskConfigPath(dir: string = LOCAL_DISK_DIR): string {
