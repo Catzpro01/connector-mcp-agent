@@ -67,7 +67,7 @@ Usage:
 
 function printProjectTable(projects: ProjectSummary[]): void {
   if (projects.length === 0) {
-    console.log("Belum ada project di VPS. Gunakan opsi 'new project'.");
+    console.log("Belum ada project. Gunakan opsi 'new project'.");
     return;
   }
   for (const p of projects) {
@@ -79,7 +79,7 @@ function printProjectTable(projects: ProjectSummary[]): void {
 async function cmdList(): Promise<void> {
   const cfg = loadCliConfig();
   const { projects } = await listProjects(cfg);
-  console.log("\n📦 DAFTAR PROJECT DI VPS:");
+  console.log("\n📦 DAFTAR WORKSPACE PROJECT:");
   printProjectTable(projects);
 }
 
@@ -112,7 +112,7 @@ async function cmdNewProject(name?: string, description?: string): Promise<void>
     rl.close();
   }
   if (!pName) throw new Error("Nama project wajib diisi.");
-  console.log(`\n⏳ Membuat project '${pName}' di VPS...`);
+  console.log(`\n⏳ Membuat workspace project '${pName}'...`);
   const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
     name: pName,
     description: pDesc || "Workspace dibuat lewat connector-cli",
@@ -159,16 +159,16 @@ async function cmdConnect(slug: string): Promise<void> {
     console.log(`⚠️ Gagal menulis .mcp.json: ${(error as Error).message}`);
   }
 
-  // Register enter session di VPS agar generation naik dan dicatat di Ledger
+  // Register enter session di workspace agar generation naik dan dicatat di Ledger
   try {
     await callMcpTool(cfg, "session.enter", { project: slug });
-    console.log(`🚀 Sesi aktif tercatat di Ledger VPS untuk ${slug}.`);
+    console.log(`🚀 Sesi aktif tercatat di Ledger Workspace untuk ${slug}.`);
   } catch (e) {
     // Biarkan tetap lanjut
   }
 
   console.log(`\n💾 Session Disk: ${disk.path} (terisolasi, dibersihkan saat sesi selesai)`);
-  console.log(`🔗 Terhubung ke VPS! Semua tool remote kini aktif.`);
+  console.log(`🔗 Terhubung ke Workspace! Semua tool kini aktif.`);
 }
 
 async function cmdTabs(): Promise<void> {
@@ -202,11 +202,11 @@ async function cmdNewTab(): Promise<void> {
   const name = rawName || `tab-${Date.now().toString(36)}`;
   console.log("\nPilih Target Lokasi Tab:");
   console.log("  1. Laptop (Local Disk)");
-  console.log("  2. VPS Remote");
+  console.log("  2. Remote Workspace");
   const loc = (await rl.question("Pilihan (1/2, default: 1): ")).trim() || "1";
   if (loc === "2") {
-    console.log("\nPilih Mode Tab VPS:");
-    console.log("  1. Masuk ke Sesi Tab Interaktif VPS (Foreground Remote Shell) [Default]");
+    console.log("\nPilih Mode Tab Remote:");
+    console.log("  1. Masuk ke Sesi Tab Interaktif (Foreground Remote Shell) [Default]");
     console.log("  2. Jalankan Perintah di Background Tab (Latar Belakang)");
     const mode = (await rl.question("Pilihan (1/2, default: 1): ")).trim() || "1";
     if (mode === "1") {
@@ -215,15 +215,15 @@ async function cmdNewTab(): Promise<void> {
       await session.startInteractive();
       return;
     }
-    const cmd = (await rl.question("Perintah background VPS: ")).trim();
+    const cmd = (await rl.question("Perintah background remote: ")).trim();
     rl.close();
     if (!cmd) {
       console.log("Perintah tidak boleh kosong.");
       return;
     }
-    console.log(`\n⏳ Membuka Tab VPS "${name}"...`);
+    console.log(`\n⏳ Membuka Tab Remote "${name}"...`);
     const tab = await tabManager.openVpsTab(name, cmd);
-    console.log(`✅ Tab VPS "${tab.name}" [${tab.id}] BERJALAN di latar belakang VPS.`);
+    console.log(`✅ Tab Remote "${tab.name}" [${tab.id}] BERJALAN di latar belakang.`);
     return;
   }
 
@@ -250,7 +250,7 @@ async function cmdSetting(): Promise<void> {
   console.log(`Nama Agent saat ini  : ${stored.agentName || process.env.CONNECTOR_AGENT || "(belum disetel)"}`);
   console.log();
 
-  const newUrl = await rl.question("Masukkan Link Server VPS baru (Enter untuk lewati): ");
+  const newUrl = await rl.question("Masukkan Link Workspace Server baru (Enter untuk lewati): ");
   const newKey = await rl.question("Masukkan API Key baru (Enter untuk lewati): ");
   const newAgent = await rl.question("Masukkan Nama Agent baru (Enter untuk lewati): ");
   rl.close();
@@ -415,7 +415,7 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
       console.log(` 📂 RUANG KERJA PROJECT: \x1b[1;36m${slug}\x1b[0m`);
       console.log(` Akses Agen: \x1b[1;32m${agentName}\x1b[0m`);
       console.log("-------------------------------------------------------------------------------");
-      console.log("  a. tab vps          -> Interactive remote shell di container VPS");
+      console.log("  a. tab remote       -> Interactive remote shell di workspace");
       console.log("  b. tab disk session  -> Local session disk & MCP memory graph");
       console.log("  c. project list     -> Kembali ke daftar project");
       console.log("  h. help             -> Bantuan & penjelasan fitur tab");
@@ -458,8 +458,8 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
         console.log("===============================================================================");
         console.log(` 💡 PANDUAN PENGENALAN FITUR TAB: ${slug}`);
         console.log("===============================================================================");
-        console.log(" • a. TAB VPS (Interactive Remote Shell Container):");
-        console.log("   - Lingkungan eksekusi Linux asli di container VPS (/workspace).");
+        console.log(" • a. TAB REMOTE (Interactive Remote Shell):");
+        console.log("   - Lingkungan eksekusi Linux lengkap di workspace remote (/workspace).");
         console.log("   - Jalankan build, testing, compile, package manager (npm, cargo, python, git).");
         console.log("   - Multitasking: jalankan background tab dengan 'bg <command>' atau '<command> &'.");
         console.log("   - Kirim progress: ketik 'lapor <pesan>' untuk posting ke GitHub Issues #progress.");
@@ -506,7 +506,7 @@ async function interactiveMenu(): Promise<void> {
   }
 
   const cfg = loadCliConfig();
-  console.log(`⏳ Mengautentikasi agen '${agentName}' ke server VPS...`);
+  console.log(`⏳ Mengautentikasi agen '${agentName}' ke workspace server...`);
   const storedToken = readStoredSessionToken(agentName);
   const authRes = await authWithServer(cfg, agentName, storedToken);
 
@@ -550,8 +550,8 @@ async function interactiveMenu(): Promise<void> {
       console.log(` Agen Aktif : \x1b[1;32m${agentName}\x1b[0m`);
       console.log("-------------------------------------------------------------------------------");
       console.log("  1. project latest    -> Buka project yang terakhir aktif");
-      console.log("  2. new project       -> Buat project & container sandbox baru di VPS");
-      console.log("  3. project list      -> Lihat & pilih daftar seluruh project di VPS");
+      console.log("  2. new project       -> Buat workspace project baru");
+      console.log("  3. project list      -> Lihat & pilih daftar seluruh project");
       console.log("  4. standby           -> Mode standby (pertahankan workspace & memori aktif)");
       console.log("  h. help              -> Bantuan & pengenalan fitur");
       console.log("-------------------------------------------------------------------------------");
@@ -589,7 +589,7 @@ async function interactiveMenu(): Promise<void> {
         } else if (choice === "2") {
           console.clear();
           console.log("===============================================================================");
-          console.log(" ➕ BUAT PROJECT BARU DI VPS");
+          console.log(" ➕ BUAT WORKSPACE PROJECT BARU");
           console.log("===============================================================================\n");
           let pName = "";
           let pDesc = "";
@@ -610,7 +610,7 @@ async function interactiveMenu(): Promise<void> {
           }
           if (!pName) continue;
 
-          console.log(`\n⏳ Menginisialisasi project '${pName}' & membuat sandbox di VPS...`);
+          console.log(`\n⏳ Menginisialisasi workspace project '${pName}'...`);
           const created = await callMcpTool<{ slug: string; name: string }>(cfg, "project.create", {
             name: pName,
             description: pDesc || "Workspace dibuat lewat connector-cli",
@@ -623,10 +623,10 @@ async function interactiveMenu(): Promise<void> {
             console.clear();
             const { projects } = await listProjects(cfg);
             console.log("===============================================================================");
-            console.log(" 📦 DAFTAR SELURUH PROJECT DI VPS");
+            console.log(" 📦 DAFTAR SELURUH WORKSPACE PROJECT");
             console.log("===============================================================================");
             if (projects.length === 0) {
-              console.log("  (Belum ada project tersimpan di VPS)\n");
+              console.log("  (Belum ada project tersimpan)\n");
             } else {
               projects.forEach((p, idx) => {
                 console.log(`  ${idx + 1}. \x1b[1;36m${p.slug.padEnd(16)}\x1b[0m : ${p.name}`);
@@ -634,7 +634,7 @@ async function interactiveMenu(): Promise<void> {
             }
             console.log("-------------------------------------------------------------------------------");
             console.log("  b. kembali           -> Kembali ke menu utama");
-            console.log("  h. help              -> Penjelasan tentang project sandbox");
+            console.log("  h. help              -> Penjelasan tentang project workspace");
             console.log("-------------------------------------------------------------------------------");
             let sel = "";
             try {
@@ -664,8 +664,8 @@ async function interactiveMenu(): Promise<void> {
               console.log("===============================================================================");
               console.log(" 💡 PANDUAN DAFTAR PROJECT");
               console.log("===============================================================================");
-              console.log(" • Setiap project memiliki direktori dan container Linux Podman terisolasi.");
-              console.log(" • Kode & berkas disimpan di /var/lib/connector/projects/<slug>/work di VPS.");
+              console.log(" • Setiap project memiliki direktori dan workspace runtime terisolasi.");
+              console.log(" • Kode & berkas tersinkronisasi secara otomatis di shared runtime.");
               console.log(" • Knowledge Graph permanen dan index simbol kode terpisah per project.");
               console.log(" • Ketik nomor project (misal: 1, 2) untuk masuk ke menu tab project.");
               console.log("===============================================================================\n");
@@ -689,18 +689,18 @@ async function interactiveMenu(): Promise<void> {
           console.log("===============================================================================");
           console.log(" 💡 PANDUAN PENGENALAN FITUR CONNECTOR-CLI (MENU UTAMA)");
           console.log("===============================================================================");
-          console.log(" connector-cli menghubungkan agen otonom Anda langsung ke environment VPS.");
+          console.log(" connector-cli menghubungkan agen otonom Anda langsung ke persistent shared workspace.");
           console.log();
           console.log(" 1. project latest :");
           console.log("    Membuka langsung project yang paling baru Anda operasikan.");
           console.log("    Cocok untuk melanjutkan pekerjaan tanpa mencari di daftar.");
           console.log();
           console.log(" 2. new project :");
-          console.log("    Membuat ruang kerja baru lengkap dengan container sandbox terisolasi,");
+          console.log("    Membuat ruang kerja baru lengkap dengan runtime terisolasi,");
           console.log("    repositori git baru, memori knowledge graph baru, dan code indexer baru.");
           console.log();
           console.log(" 3. project list :");
-          console.log("    Melihat katalog seluruh project yang tersedia di server VPS untuk dipilih.");
+          console.log("    Melihat katalog seluruh project yang tersedia untuk dipilih.");
           console.log();
           console.log(" • Penggantian Akun :");
           console.log("    Jika ingin berganti identitas agen, gunakan 'connector-cli login <nama>'.");
@@ -774,7 +774,7 @@ async function cmdVpsExec(args: string[]): Promise<void> {
     const session = new VpsSession(project);
     return session.startInteractive();
   }
-  console.log(`\x1b[1;36m[VPS: master | ${project}]\x1b[0m \x1b[1;32mfern@master\x1b[0m: \x1b[1m${remoteCmd}\x1b[0m\n`);
+  console.log(`\x1b[1;36m[Workspace: master | ${project}]\x1b[0m \x1b[1;32mworkspace@master\x1b[0m: \x1b[1m${remoteCmd}\x1b[0m\n`);
 
   interface ExecResponse {
     exit: number;
@@ -799,7 +799,7 @@ async function cmdMemory(action?: string, rawArgs: string[] = []): Promise<void>
   const { project, cleanArgs: args } = extractProjectFlag(rawArgs, cfg.defaultProject || "smoke-app");
 
   if (!action || action === "graph") {
-    console.log(`\n⏳ Mengambil Knowledge Graph project '${project}' dari VPS...`);
+    console.log(`\n⏳ Mengambil Knowledge Graph project '${project}'...`);
     const g = await getKnowledgeGraph(cfg, project);
     console.log(`\n🧠 KNOWLEDGE GRAPH: ${g.entities.length} entitas, ${g.relations.length} relasi`);
     for (const e of g.entities) {
@@ -963,7 +963,7 @@ async function cmdCode(action?: string, rawArgs: string[] = []): Promise<void> {
   }
 
   if (action === "reindex") {
-    console.log(`\n⏳ Memindai ulang codebase project '${project}' di VPS...`);
+    console.log(`\n⏳ Memindai ulang codebase project '${project}'...`);
     const res = await reindexCode(cfg, project);
     if (res.success) {
       console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
@@ -1006,7 +1006,7 @@ async function cmdLogin(newName?: string): Promise<void> {
     }
   }
 
-  console.log(`\n⏳ Mengautentikasi agen '${name}' ke server VPS...`);
+  console.log(`\n⏳ Mengautentikasi agen '${name}' ke workspace server...`);
   const authRes = await authWithServer(cfg, name);
   if (!authRes.success) {
     console.error(`\n\x1b[31m❌ Akses Ditolak: ${authRes.error}\x1b[0m\n`);
