@@ -33,7 +33,7 @@ npm link
 # Opsi 2: Langsung dari GitHub
 npm install -g git+https://github.com/Catzpro01/connector-mcp-agent.git
 ```
-*Konfigurasi agent*: **Zero Configuration**. CLI otomatis tersambung ke `http://your-vps-ip:3210`. Menu setting telah dihilangkan dari CLI client sehingga agen tidak bisa salah konfigurasi.
+*Konfigurasi agent*: Setelah install, jalankan `connector-cli setting` untuk menyetel URL server VPS Anda.
 
 ---
 

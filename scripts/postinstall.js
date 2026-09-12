@@ -1,9 +1,8 @@
-﻿import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { join } from "node:path";
 
 const LOCAL_DISK_DIR = join(homedir(), ".connector-cli");
-const DEFAULT_URL = "http://your-vps-ip:3210";
 
 try {
   mkdirSync(LOCAL_DISK_DIR, { recursive: true });
@@ -20,17 +19,21 @@ try {
   } catch {}
 
   const next = {
-    url: cfg.url || DEFAULT_URL,
+    url: cfg.url || "",
     agentName: cfg.agentName || user,
     apiKey: cfg.apiKey || "",
   };
 
   writeFileSync(cfgPath, JSON.stringify(next, null, 2) + "\n");
   console.log("\n=======================================================");
-  console.log(" 🟢 Connector-CLI Installed & Auto-Configured!");
-  console.log(` Server VPS  : ${next.url} (Direct / Open Dev Mode)`);
-  console.log(` Agent Login : ${next.agentName}`);
-  console.log(" Status      : Langsung Terhubung ke VPS Tanpa Perlu Penyesuaian!");
+  console.log(" 🟢 Connector-CLI Installed!");
+  console.log(` Agent Name  : ${next.agentName}`);
+  if (!next.url) {
+    console.log(" ⚠️  Server URL belum dikonfigurasi.");
+    console.log("    Jalankan: connector-cli setting");
+  } else {
+    console.log(` Server URL  : ${next.url}`);
+  }
   console.log("=======================================================\n");
 } catch (err) {
   // Silent on postinstall error

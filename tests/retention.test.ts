@@ -7,14 +7,17 @@ import { TabManager } from "../src/tab-manager.js";
 import { loadCliConfig, DEFAULT_CONNECTOR_URL } from "../src/config.js";
 
 describe("zero-config and rolling retention (Ticket 04)", () => {
-  it("defaults to VPS endpoint http://your-vps-ip:3210 with zero setup prompt", () => {
-    // Overriding env to simulate clean install
+  it("DEFAULT_CONNECTOR_URL is empty (no hardcoded server address)", () => {
+    expect(DEFAULT_CONNECTOR_URL).toBe("");
+  });
+
+  it("loadCliConfig throws when no URL is configured (zero-config enforcement)", () => {
     const oldUrl = process.env.CONNECTOR_URL;
     delete process.env.CONNECTOR_URL;
 
-    const cfg = loadCliConfig();
-    expect(cfg.url).toBe(DEFAULT_CONNECTOR_URL);
-    expect(cfg.url).toBe("http://your-vps-ip:3210");
+    // loadCliConfig with isolated temp dir (no stored config) must throw
+    const tmpDir = mkdtempSync(join(tmpdir(), "conn-cfg-"));
+    expect(() => loadCliConfig({}, tmpDir)).toThrow(/CONNECTOR_URL/i);
 
     if (oldUrl) process.env.CONNECTOR_URL = oldUrl;
   });

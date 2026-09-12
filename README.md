@@ -1,4 +1,4 @@
-﻿# Connector MCP Agent
+# Connector MCP Agent
 
 > High-performance Model Context Protocol (MCP) workspace bridge and remote execution runner for autonomous AI developer agents (Claude, Gemini, Cursor, Cline, Codex).
 

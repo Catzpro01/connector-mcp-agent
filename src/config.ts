@@ -1,6 +1,6 @@
 import { readStoredAgentName, readStoredConfig } from "./agent-name.js";
 
-export const DEFAULT_CONNECTOR_URL = "http://your-vps-ip:3210";
+export const DEFAULT_CONNECTOR_URL = "";
 
 export interface CliConfig {
   url: string;
