@@ -34,37 +34,36 @@ import { StealthShell } from "./stealth-shell.js";
 import { importProjectMemorySilent, startSilentAutoSyncWatcher } from "./memory-sync.js";
 import { clientPolicy } from "./agent-policy.js";
 
-const HELP = `connector-cli — remote workspace & MCP agent connector.
+const HELP = `connector-cli — persistent workspace runtime for AI agents.
 
 Usage:
   connector-cli                            Buka menu interaktif
-  connector-cli list                       Lihat daftar project di VPS
+  connector-cli list                       Lihat daftar workspace project
   connector-cli latest                     Lihat project terbaru & ringkasan memori
-  connector-cli new <name> [desc]          Buat project baru di VPS
+  connector-cli new <name> [desc]          Buat workspace project baru
   connector-cli connect <project>          Konek project, unduh skill, register .mcp.json
-  connector-cli inherit <project>          Lihat pewarisan context generasi sebelumnya
-  connector-cli vps [command]              Masuk ke tab shell interaktif VPS, atau jalankan perintah langsung (pure HTTP)
-  connector-cli tab vps                    Buka sesi tab terminal interaktif di VPS remote
-  connector-cli tabs                       Lihat dashboard semua tab live (Laptop & VPS)
-  connector-cli tab new [--vps] [name] <cmd...> Buka tab background baru
-  connector-cli tab list                   Daftar tab live
-  connector-cli tab attach <name|id>       Lihat output real-time tab
-  connector-cli tab kill <name|id>         Hentikan tab yang sedang berjalan
-  connector-cli tab clean                  Bersihkan tab-tab yang sudah selesai/exited
-  connector-cli memory [graph|search|node|learn|relate] Akses Knowledge Graph permanen MCP
-  connector-cli code <query>               Pencarian kode instan seperti Cursor
+  connector-cli inherit <project>          Lihat pewarisan context & skill dari agent sebelumnya
+  connector-cli exec [command]             Jalankan perintah di workspace runtime
+  connector-cli tab exec                   Buka sesi shell interaktif di workspace remote
+  connector-cli tabs                       Lihat dashboard semua tab live (lokal & remote)
+  connector-cli tab new [--remote] [name] <cmd...> Buka background task baru
+  connector-cli tab list                   Daftar background task aktif
+  connector-cli tab attach <name|id>       Lihat output real-time task
+  connector-cli tab kill <name|id>         Hentikan task yang sedang berjalan
+  connector-cli tab clean                  Bersihkan task yang sudah selesai
+  connector-cli memory [graph|search|node|learn|relate] Akses persistent Knowledge Graph
+  connector-cli code <query>               Pencarian kode semantik seperti Cursor
   connector-cli symbol <name>              Cari definisi simbol fungsi/class/interface
   connector-cli outline <file>             Outline hierarki simbol file
-  connector-cli reindex                    Trigger re-index codebase project di VPS
-  connector-cli login [nama]               Ganti identitas agen atau login sebagai agen lain
-  connector-cli logout                     Lepas sesi aktif dan keluar dari akun agen saat ini
-  connector-cli whoami                     Tampilkan identitas agen saat ini
-  connector-cli ping                       Uji latensi & koneksi cepat ke VPS
-  connector-cli setting                    Konfigurasi link server & API key
-  connector-cli status                     Cek status koneksi VPS
+  connector-cli reindex                    Re-index codebase project di workspace
+  connector-cli whoami                     Tampilkan identitas agent saat ini
+  connector-cli ping                       Uji latensi koneksi ke workspace backend
+  connector-cli setting                    Konfigurasi workspace URL & API key
+  connector-cli status                     Cek status koneksi workspace
   connector-cli version, --version, -v     Tampilkan versi connector-cli
   connector-cli help                       Tampilkan bantuan ini
 `;
+
 
 function printProjectTable(projects: ProjectSummary[]): void {
   if (projects.length === 0) {
@@ -284,9 +283,9 @@ const CLI_VERSION = "0.1.0";
 
 async function cmdWhoami(): Promise<void> {
   const cfg = loadCliConfig();
-  console.log(`\n👤 Identitas Agen : ${cfg.agentName}`);
-  console.log(`🌐 Server VPS     : ${cfg.url}`);
-  console.log(`🔑 API Key        : ${cfg.apiKey ? "Disetel" : "(default / dev)"}\n`);
+  console.log(`\n👤 Agent Identity  : ${cfg.agentName}`);
+  console.log(`🔗 Workspace       : ${cfg.url}`);
+  console.log(`🔑 Auth            : ${cfg.apiKey ? "Configured" : "default"}\n`);
 }
 
 async function cmdPing(): Promise<void> {
@@ -296,12 +295,12 @@ async function cmdPing(): Promise<void> {
     const res = await fetch(`${cfg.url}/health`);
     const latency = Date.now() - start;
     if (res.ok) {
-      console.log(`\n🏓 PONG! VPS di ${cfg.url} merespons dalam ${latency}ms (HTTP ${res.status}).\n`);
+      console.log(`\n🏓 PONG! Workspace backend responded in ${latency}ms (HTTP ${res.status}).\n`);
     } else {
-      console.log(`\n⚠️ VPS di ${cfg.url} merespons HTTP ${res.status} (${latency}ms).\n`);
+      console.log(`\n⚠️ Workspace backend responded HTTP ${res.status} (${latency}ms).\n`);
     }
   } catch (err: any) {
-    console.error(`\n❌ Gagal menghubungi VPS di ${cfg.url}: ${err.message}\n`);
+    console.error(`\n❌ Cannot reach workspace backend: ${err.message}\n`);
   }
 }
 
