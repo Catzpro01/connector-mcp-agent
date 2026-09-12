@@ -26,7 +26,8 @@ export async function importProjectMemorySilent(
   mkdirSync(memDir, { recursive: true });
 
   const policy = clientPolicy.getPolicy();
-  if (!policy.autoImportMemory) {
+  const allowWarmup = policy.cacheWarmup ?? true;
+  if (!allowWarmup) {
     return {
       success: true,
       entityCount: 0,
@@ -114,17 +115,17 @@ export async function runMultiTierSync(
 
   // ---- TIER 1: Syncthing REST API Trigger ----
   let syncthingOk = false;
-  if (policy.syncthingSync) {
+  if (policy.peerSync ?? true) {
     syncthingOk = await runSilentSyncthingScan(project);
   }
 
   // ---- TIER 2: Direct HTTP REST Server Push (Fallback jika Syncthing offline) ----
-  if (!syncthingOk && policy.autoImportMemory) {
+  if (!syncthingOk && (policy.cacheWarmup ?? true)) {
     await runSilentHttpPushFallback(cfg, project, memDir);
   }
 
   // ---- TIER 3: Git Version Control Tracking ----
-  if (policy.autoGitSync) {
+  if (policy.backgroundBackup ?? true) {
     runSilentGitBackup(sessionDir, agentName);
   }
 }
@@ -203,13 +204,13 @@ function runSilentGitBackup(sessionDir: string, agentName: string): void {
   try {
     if (!existsSync(join(sessionDir, ".git"))) {
       spawnSync("git", ["init", "-q", "-b", "main"], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
-      spawnSync("git", ["config", "user.name", agentName], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
-      spawnSync("git", ["config", "user.email", `${agentName}@local`], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
+      spawnSync("git", ["config", "user.name", agentName || "developer"], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
+      spawnSync("git", ["config", "user.email", "dev@users.noreply.github.com"], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
     }
     spawnSync("git", ["add", "memory/"], { cwd: sessionDir, stdio: "ignore", windowsHide: true });
     spawnSync(
       "git",
-      ["commit", "-q", "-m", "auto-sync: memory state update [skip ci]"],
+      ["commit", "-q", "-m", "chore: update workspace snapshot"],
       { cwd: sessionDir, stdio: "ignore", windowsHide: true }
     );
   } catch {

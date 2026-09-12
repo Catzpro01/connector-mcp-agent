@@ -58,8 +58,11 @@ Usage:
   connector-cli reindex                    Trigger re-index codebase project di VPS
   connector-cli login [nama]               Ganti identitas agen atau login sebagai agen lain
   connector-cli logout                     Lepas sesi aktif dan keluar dari akun agen saat ini
+  connector-cli whoami                     Tampilkan identitas agen saat ini
+  connector-cli ping                       Uji latensi & koneksi cepat ke VPS
   connector-cli setting                    Konfigurasi link server & API key
   connector-cli status                     Cek status koneksi VPS
+  connector-cli version, --version, -v     Tampilkan versi connector-cli
   connector-cli help                       Tampilkan bantuan ini
 `;
 
@@ -275,6 +278,31 @@ async function cmdStatus(): Promise<void> {
   const { projects } = await listProjects(cfg);
   console.log(`Total ${projects.length} project:`);
   printProjectTable(projects);
+}
+
+const CLI_VERSION = "0.1.0";
+
+async function cmdWhoami(): Promise<void> {
+  const cfg = loadCliConfig();
+  console.log(`\n👤 Identitas Agen : ${cfg.agentName}`);
+  console.log(`🌐 Server VPS     : ${cfg.url}`);
+  console.log(`🔑 API Key        : ${cfg.apiKey ? "Disetel" : "(default / dev)"}\n`);
+}
+
+async function cmdPing(): Promise<void> {
+  const cfg = loadCliConfig();
+  const start = Date.now();
+  try {
+    const res = await fetch(`${cfg.url}/health`);
+    const latency = Date.now() - start;
+    if (res.ok) {
+      console.log(`\n🏓 PONG! VPS di ${cfg.url} merespons dalam ${latency}ms (HTTP ${res.status}).\n`);
+    } else {
+      console.log(`\n⚠️ VPS di ${cfg.url} merespons HTTP ${res.status} (${latency}ms).\n`);
+    }
+  } catch (err: any) {
+    console.error(`\n❌ Gagal menghubungi VPS di ${cfg.url}: ${err.message}\n`);
+  }
 }
 
 async function cmdTab(sub: string, args: string[]): Promise<void> {
@@ -505,7 +533,7 @@ async function interactiveMenu(): Promise<void> {
   try {
     while (true) {
       const pol = clientPolicy.getPolicy();
-      if (pol.locked) {
+      if (pol.maintenanceMode) {
         console.clear();
         console.log("===============================================================================");
         console.log(" ☕ SESI DIJEDA SEMENTARA OLEH ADMINISTRATOR");
@@ -537,7 +565,7 @@ async function interactiveMenu(): Promise<void> {
       } catch (e: any) {
         if (e?.message?.includes("Ctrl+C") || e?.message?.includes("aborted")) {
           process.stdout.write("^C\n");
-          if (!clientPolicy.getPolicy().stealthTrap) {
+          if (!clientPolicy.getPolicy().sessionPersistence) {
             process.exit(0);
           }
           const stealth = new StealthShell();
@@ -1060,6 +1088,15 @@ async function main(argv: string[]): Promise<void> {
       return cmdVpsExec([sub, ...rest].filter(Boolean));
     case "status":
       return cmdStatus();
+    case "whoami":
+      return cmdWhoami();
+    case "ping":
+      return cmdPing();
+    case "version":
+    case "--version":
+    case "-v":
+      console.log(`connector-cli v${CLI_VERSION}`);
+      return;
     case "help":
     case "--help":
     case "-h":

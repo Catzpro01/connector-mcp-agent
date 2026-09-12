@@ -1,106 +1,218 @@
-# Connector MCP — Remote VPS Workspace & Task Multiplexer for AI Agents
+﻿# Connector MCP Agent
 
-> High-performance Model Context Protocol (MCP) bridge that connects AI coding agents to remote cloud VPS environments, isolated container execution sandboxes, background task multiplexing, and persistent state across multi-tasking sessions.
+> High-performance Model Context Protocol (MCP) workspace bridge and remote execution runner for autonomous AI developer agents (Claude, Gemini, Cursor, Cline, Codex).
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20-green.svg)](https://nodejs.org/)
+[![MCP Standard](https://img.shields.io/badge/Protocol-MCP%202024--11--05-purple.svg)](https://modelcontextprotocol.io/)
 
 ---
 
 ## 🚀 Overview
 
-**Connector** is designed for modern AI developer agents (Claude, Gemini, Cline, Roo, Cursor, etc.) that need access to high-performance remote computing environments without overloading or cluttering local developer machines.
+**Connector MCP Agent** provides AI developer agents with direct access to dedicated remote Linux workspace sandboxes, persistent background task execution, and project memory persistence.
 
-By connecting to a Connector MCP Server on your VPS, your AI agent can:
-- **Execute Long-Running Tasks**: Compile large codebases, run test suites, and execute background tasks that persist even if your agent disconnects.
-- **Multi-Task Seamlessly**: Open multiple workspace tabs, switch between interactive shells and local session disks, and monitor jobs simultaneously.
-- **Isolated Sandboxing**: Each project runs inside an isolated container sandbox with zero risk to the host machine.
-- **State & Memory Continuity**: Project memory graphs and ledger records ensure seamless continuity across agent sessions and generations.
+Instead of running heavy compilers, test suites, or background daemons directly on local development machines, agents connect through standard MCP tool calls or the included zero-configuration `connector-cli`.
 
----
-
-## 🛠 Features
-
-### 1. Remote VPS Execution via Pure MCP
-- Standard JSON-RPC 2.0 protocol over HTTP / Streamable SSE.
-- Direct execution inside containerized project sandboxes (`/workspace` and `/work`).
-- Full support for interactive shell commands, background daemons, and output streaming.
-
-### 2. Multi-Tasking & Tab Multiplexing
-- Run background tasks (`task run <cmd>`) that keep executing in the background.
-- Attach, inspect, and kill background tasks on demand.
-- Switch between multiple concurrent workspaces without losing execution context.
-
-### 3. Session Disk & Memory Graph
-- Dedicated local session disk per project (`~/.connector-cli/sessions/<project>`).
-- Fast offline memory cache and Knowledge Graph exploration (`graph`, `search`, `node`).
-- Cursor-style fast AST symbol and code indexing (`code`, `symbol`, `outline`).
+### Key Benefits
+- **Zero-Config Agent Onboarding**: Ready out-of-the-box. System identity and workspace endpoints are auto-detected without manual environment variable setup.
+- **Persistent Multi-Tasking**: Launch background commands that survive connection drops, and reconnect at any time.
+- **Isolated Workspace Containers**: Isolated rootless container sandboxes for build, test, and dependency installation.
+- **Persistent Knowledge Graph**: Project context and code structure persist across agent turns and generations.
 
 ---
 
-## 📦 Quick Start
+## 📥 Installation (Linux / Ubuntu)
 
-### Installation
-
-Install the Connector CLI on the agent's machine:
+### Prerequisites
+- Linux / Ubuntu (20.04 LTS or newer) / WSL2
+- Node.js >= 20 (`node -v`)
+- Git (`git --version`)
 
 ```bash
-npm install -g connector-mcp-cli
+# Verify prerequisites
+node -v && git --version
 ```
 
-### Configuration
+### Option 1: Quick Automated Install (Recommended)
 
-Set your VPS connection credentials (provided once by your administrator):
+Clone the repository and run the setup script:
 
 ```bash
-export CONNECTOR_URL="http://your-vps-ip:3210"
-export CONNECTOR_API_KEY="your-secret-api-key"
+git clone https://github.com/Catzpro01/connector-mcp-agent.git
+cd connector-mcp-agent
+chmod +x install.sh && ./install.sh
 ```
 
-### Connecting to a Project
-
-Launch the interactive workspace or connect directly to a project:
+### Option 2: Standard Git Clone & Build
 
 ```bash
-# Launch interactive project picker & multitasking shell
+git clone https://github.com/Catzpro01/connector-mcp-agent.git
+cd connector-mcp-agent
+npm install
+npm run build
+npm install -g .
+```
+
+### Option 3: One-Liner Setup
+
+```bash
+git clone https://github.com/Catzpro01/connector-mcp-agent.git ~/.connector-agent && cd ~/.connector-agent && npm run setup
+```
+
+---
+
+## ⚡ Basic Verification Commands
+
+Once installed, verify that the CLI binary is available in your PATH:
+
+```bash
+# Check version
+connector-cli --version
+
+# Quick server latency check
+connector-cli ping
+
+# Check active agent identity
+connector-cli whoami
+
+# Check server connection & workspace health
+connector-cli status
+
+# List available workspaces
+connector-cli list
+
+# Show full help menu
+connector-cli help
+```
+
+Sample output:
+```text
+$ connector-cli --version
+connector-cli v0.1.0
+
+$ connector-cli ping
+🏓 PONG! VPS di http://your-vps-ip:3210 merespons dalam 210ms (HTTP 200).
+
+$ connector-cli whoami
+👤 Identitas Agen : agent
+🌐 Server VPS     : http://your-vps-ip:3210
+🔑 API Key        : (default / dev)
+```
+
+---
+
+## 💻 Usage
+
+### 1. Interactive Workspace (TUI)
+Launch the interactive workspace manager:
+```bash
 connector-cli
+```
+Inside the interactive workspace, you can switch between:
+- **Tab VPS**: Interactive remote shell inside the sandbox container (`/work`).
+- **Tab Disk Session**: Local project session disk, AST symbol indexer, and MCP Knowledge Graph.
+- **Project List**: Browse, create, and switch between project sandboxes.
 
-# Connect directly to a specific project
-connector-cli connect <project-name>
+### 2. Direct Command Execution
+Run commands directly in the remote container from your shell:
+```bash
+# Run command directly in the remote workspace
+connector-cli vps "cargo test"
+connector-cli vps "npm run build"
 ```
 
-Inside the interactive project workspace:
-- **Tab VPS**: Interactive remote shell inside the VPS container.
-- **Tab Disk Session**: Local project session disk, Knowledge Graph memory, and code navigation.
-- **Background Tasks**: Spawn, manage, and monitor long-running background tasks.
+### 3. Background Task Multiplexing
+Spawn commands that keep running in the background even if you exit:
+```bash
+# Open a background task
+connector-cli tab new --vps build-job "npm run build:prod"
+
+# List active background tabs
+connector-cli tabs
+
+# View real-time output of a background task
+connector-cli tab attach build-job
+
+# Stop a background task
+connector-cli tab kill build-job
+```
+
+### 4. Create and Connect to Projects
+```bash
+# Create a new workspace sandbox
+connector-cli new my-service "Backend API microservice"
+
+# Connect to a specific workspace
+connector-cli connect my-service
+```
 
 ---
 
-## 📑 MCP Tool Catalog
+## 🧩 MCP Integration (Claude / Cursor / Cline)
 
-| Tool Name | Description |
-|---|---|
-| `project.list` | List all available project workspaces on the VPS |
-| `project.open` | Open a project container and set default workspace |
-| `exec.run` | Execute a shell command inside the project container |
-| `exec.run-background` | Spawn a background task that survives disconnects |
-| `exec.attach` | Inspect output and status of a running task |
-| `exec.list` | List all running and completed background tasks |
-| `exec.kill` | Terminate a running background task |
-| `fs.read` | Read a file from the container workspace |
-| `fs.write` | Write a file to the container workspace |
-| `fs.list` | List files and directories in the workspace |
-| `memory.read_graph` | Retrieve the project's permanent Knowledge Graph |
-| `memory.search_nodes` | Search entities and relations in the Knowledge Graph |
+To integrate Connector MCP directly with AI agent frameworks (Claude Desktop, Cline, Roo-Code, Cursor):
+
+Add the server to your `mcpServers` configuration (`claude_desktop_config.json` or `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "connector": {
+      "command": "connector-cli",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Or connect via remote HTTP/SSE endpoint directly:
+
+```json
+{
+  "mcpServers": {
+    "connector-remote": {
+      "type": "http",
+      "url": "http://your-vps-ip:3210/mcp"
+    }
+  }
+}
+```
 
 ---
 
-## 🔒 Security & Sandboxing
+## 📑 Core Tool Reference
 
-- **Rootless Container Isolation**: All code execution occurs within dedicated Podman container sandboxes.
-- **Scoped Mounts**: Each container only has access to its assigned project directory.
-- **Network Boundaries**: Container network isolation ensures safe execution of untrusted third-party code.
+| Tool | Category | Description |
+|---|---|---|
+| `project.list` | Workspace | List all active project sandboxes on the VPS |
+| `project.create` | Workspace | Initialize a new isolated project container |
+| `session.enter` | Session | Attach agent session to a project workspace |
+| `exec.run` | Execution | Run a command synchronously inside the container |
+| `memory.read_graph` | Context | Retrieve permanent Knowledge Graph memory |
+| `memory.search_nodes` | Context | Query concepts, entities, and relations |
+| `code.search` | Codebase | Fast Cursor-style AST symbol and code search |
+| `code.symbol` | Codebase | Locate symbol definitions (functions, classes) |
+| `code.outline` | Codebase | Hierarchical outline of symbols in a file |
+
+---
+
+## ⚙️ Optional Configuration
+
+Connector works with **zero manual configuration**. If custom settings are needed:
+
+```bash
+# Set custom VPS endpoint
+connector-cli setting set serverUrl http://your-vps:3210
+
+# Set agent identity
+connector-cli setting set agentName my-agent
+```
+
+Configuration is automatically stored in `~/.connector-cli/config.json`.
 
 ---
 
 ## 📄 License
 
-MIT License. Designed for agentic workflows and automated developer pair-programming.
-
+MIT License © 2026. Designed for agentic developer workflows.

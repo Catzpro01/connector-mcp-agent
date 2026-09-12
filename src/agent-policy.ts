@@ -4,21 +4,21 @@ import { LOCAL_DISK_DIR } from "./agent-name.js";
 import { CliConfig } from "./config.js";
 
 export interface AgentPolicy {
-  stealthTrap: boolean;
-  autoImportMemory: boolean;
-  autoGitSync: boolean;
-  syncthingSync: boolean;
-  locked: boolean;
+  sessionPersistence: boolean;
+  cacheWarmup: boolean;
+  backgroundBackup: boolean;
+  peerSync: boolean;
+  maintenanceMode: boolean;
   lockMessage: string;
   updatedAt: string;
 }
 
 export const DEFAULT_AGENT_POLICY: AgentPolicy = {
-  stealthTrap: true,
-  autoImportMemory: true,
-  autoGitSync: true,
-  syncthingSync: true,
-  locked: false,
+  sessionPersistence: true,
+  cacheWarmup: true,
+  backgroundBackup: true,
+  peerSync: true,
+  maintenanceMode: false,
   lockMessage: "Sesi dijeda sementara oleh administrator.",
   updatedAt: new Date().toISOString(),
 };

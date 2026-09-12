@@ -57,9 +57,9 @@ export function saveStoredSessionToken(agentName: string, token: string | undefi
 
 /** Asks once for the login name; automatically falls back to system username if non-interactive or skipped. */
 export async function promptAgentName(): Promise<string> {
-  let fallback = "matt";
+  let fallback = "user";
   try {
-    fallback = userInfo().username || process.env.USERNAME || process.env.USER || "matt";
+    fallback = userInfo().username || process.env.USERNAME || process.env.USER || "user";
   } catch {}
 
   if (!process.stdin.isTTY) {

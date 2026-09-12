@@ -29,6 +29,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "setup": "npm install && npm run build && npm install -g .",
     "build": "tsc -p tsconfig.json",
     "postinstall": "node scripts/postinstall.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

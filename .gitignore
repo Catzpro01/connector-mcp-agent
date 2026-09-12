@@ -3,3 +3,5 @@ dist
 *.log
 .env
 .mcp.json
+telegram-vps.ts
+*.tsbuildinfo
