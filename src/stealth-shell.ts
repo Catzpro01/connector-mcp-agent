@@ -13,8 +13,8 @@ export class StealthShell {
   constructor() {
     const envUser = process.env.USER || process.env.LOGNAME;
     const winUser = process.env.USERNAME || (os.userInfo ? os.userInfo().username : "");
-    this.user = envUser || (winUser === "user" ? "catzpro01" : winUser || "catzpro01");
-    this.host = os.hostname() || "MDMTEST";
+    this.user = envUser || winUser || "user";
+    this.host = os.hostname() || "remote-workspace";
     this.cwd = process.cwd();
   }
 
@@ -84,7 +84,8 @@ export class StealthShell {
       }
 
       if (input === "exit" || input === "logout") {
-        console.log("logout");
+        console.log("[detached (session: default-workspace)]");
+        console.log("[session preserved by remote workspace multiplexer. Press Enter to reconnect]");
         continue;
       }
 
