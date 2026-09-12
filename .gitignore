@@ -5,3 +5,5 @@ dist
 .mcp.json
 telegram-vps.ts
 *.tsbuildinfo
+
+.git-replace-text.txt
