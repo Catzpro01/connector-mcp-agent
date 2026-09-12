@@ -25,7 +25,7 @@ export function createMcpServer(): Server {
         {
           name: "tab_new",
           description:
-            "Buka tab command prompt background baru (di Laptop atau VPS) untuk menjalankan compile, instalasi, pengujian, atau perintah panjang tanpa memblokir agen. ATURAN: Tab instalasi/kompilasi yang telah selesai dicek WAJIB segera ditutup dengan tab_kill/tab_clean agar resource bersih; tab daemon/service yang masih digunakan dapat dibiarkan aktif.",
+            "Buka tab command prompt background baru (di Laptop atau Runtime Engine) untuk menjalankan compile, instalasi, pengujian, atau perintah panjang tanpa memblokir agen. ATURAN: Tab instalasi/kompilasi yang telah selesai dicek WAJIB segera ditutup dengan tab_kill/tab_clean agar resource bersih; tab daemon/service yang masih digunakan dapat dibiarkan aktif.",
           inputSchema: {
             type: "object",
             properties: {
@@ -39,8 +39,8 @@ export function createMcpServer(): Server {
               },
               target: {
                 type: "string",
-                enum: ["laptop", "vps"],
-                description: "Target eksekusi: 'laptop' (default) atau 'vps' (untuk beban komputasi berat)",
+                enum: ["laptop", "runtime"],
+                description: "Target eksekusi: 'laptop' (default) atau 'runtime' (untuk beban komputasi berat)",
               },
               cwd: {
                 type: "string",
@@ -53,7 +53,7 @@ export function createMcpServer(): Server {
         {
           name: "tab_list",
           description:
-            "Melihat live dashboard semua tab multitasking (Laptop & VPS) yang sedang berjalan (running) maupun sudah selesai (exited) beserta exit code-nya.",
+            "Melihat live dashboard semua tab multitasking (Laptop & Runtime Engine) yang sedang berjalan (running) maupun sudah selesai (exited) beserta exit code-nya.",
           inputSchema: {
             type: "object",
             properties: {},
@@ -97,14 +97,14 @@ export function createMcpServer(): Server {
           },
         },
         {
-          name: "vps_exec",
-          description: "Jalankan perintah langsung di Linux VPS via pure HTTP streamable MCP (tanpa SSH).",
+          name: "runtime_exec",
+          description: "Jalankan perintah langsung di isolated runtime environment via pure HTTP streamable MCP.",
           inputSchema: {
             type: "object",
             properties: {
               command: {
                 type: "string",
-                description: "Perintah Linux yang akan dijalankan langsung di VPS",
+                description: "Perintah Linux yang akan dijalankan di runtime engine",
               },
             },
             required: ["command"],
@@ -122,16 +122,16 @@ export function createMcpServer(): Server {
       case "tab_new": {
         const cmd = String(a.command || "").trim();
         const tabName = a.name ? String(a.name).trim() : `tab-${Date.now().toString(36)}`;
-        const target = a.target === "vps" ? "vps" : "laptop";
+        const target = a.target === "runtime" || a.target === "vps" ? "runtime" : "laptop";
         const cwd = a.cwd ? String(a.cwd) : process.cwd();
 
-        if (target === "vps") {
+        if (target === "runtime") {
           const tab = await tabManager.openVpsTab(tabName, cmd);
           return {
             content: [
               {
                 type: "text",
-                text: `✅ Tab VPS "${tab.name}" [${tab.id}] berhasil dibuka di background VPS.\nCommand: ${cmd}\nStatus: ${tab.status}`,
+                text: `✅ Tab Runtime "${tab.name}" [${tab.id}] berhasil dibuka di background.\nCommand: ${cmd}\nStatus: ${tab.status}`,
               },
             ],
           };
@@ -204,7 +204,7 @@ export function createMcpServer(): Server {
         };
       }
 
-      case "vps_exec": {
+      case "runtime_exec": {
         const cmd = String(a.command || "").trim();
         try {
           const cfg = loadCliConfig();
@@ -224,7 +224,7 @@ export function createMcpServer(): Server {
         } catch (err: any) {
           return {
             isError: true,
-            content: [{ type: "text", text: `Error VPS execution: ${err.message}` }],
+            content: [{ type: "text", text: `Error runtime execution: ${err.message}` }],
           };
         }
       }

@@ -14,7 +14,7 @@ export interface MemoryImportResult {
 }
 
 /**
- * Mengimpor memori knowledge graph dari VPS ke disk sesi lokal secara senyap di latar belakang.
+ * Mengimpor memori knowledge graph dari Persistent Memory ke disk sesi lokal secara senyap di latar belakang.
  */
 export async function importProjectMemorySilent(
   cfg: CliConfig,
@@ -37,7 +37,7 @@ export async function importProjectMemorySilent(
   }
 
   try {
-    // 1. Ambil snapshot memori VPS
+    // 1. Ambil snapshot dari Persistent Memory
     const graph = await getKnowledgeGraph(cfg, project);
     const entityCount = graph.entities ? graph.entities.length : 0;
     const relationCount = graph.relations ? graph.relations.length : 0;

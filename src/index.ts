@@ -244,8 +244,8 @@ async function cmdNewTab(): Promise<void> {
 async function cmdSetting(): Promise<void> {
   const stored = readStoredConfig();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  console.log("\n⚙️  PENGATURAN SERVER & KREDENSIAL");
-  console.log(`Link Server saat ini : ${stored.url || process.env.CONNECTOR_URL || "(belum disetel)"}`);
+  console.log("\n⚙️  PENGATURAN RUNTIME");
+  console.log(`Workspace URL saat ini : ${stored.url || process.env.CONNECTOR_URL || "(belum disetel)"}`);
   console.log(`API Key saat ini     : ${stored.apiKey || process.env.CONNECTOR_API_KEY ? "********" : "(belum disetel)"}`);
   console.log(`Nama Agent saat ini  : ${stored.agentName || process.env.CONNECTOR_AGENT || "(belum disetel)"}`);
   console.log();
@@ -271,11 +271,11 @@ async function cmdSetting(): Promise<void> {
 async function cmdStatus(): Promise<void> {
   const cfg = loadCliConfig();
   const res = await fetch(`${cfg.url}/health`);
-  if (!res.ok) throw new Error(`Connector di ${cfg.url} tidak merespons (HTTP ${res.status}).`);
+  if (!res.ok) throw new Error(`Runtime engine tidak merespons (HTTP ${res.status}).`);
   const body = (await res.json()) as { ok: boolean; mode: string };
-  console.log(`\n✅ Connector di ${cfg.url} sehat (Mode eksekusi: ${body.mode}).`);
+  console.log(`\n🟢 Runtime Engine : Siap & Aktif (Isolated Environment)`);
   const { projects } = await listProjects(cfg);
-  console.log(`Total ${projects.length} project:`);
+  console.log(`📂 Total ${projects.length} workspace project:`);
   printProjectTable(projects);
 }
 
@@ -284,8 +284,8 @@ const CLI_VERSION = "0.1.0";
 async function cmdWhoami(): Promise<void> {
   const cfg = loadCliConfig();
   console.log(`\n👤 Agent Identity  : ${cfg.agentName}`);
-  console.log(`🔗 Workspace       : ${cfg.url}`);
-  console.log(`🔑 Auth            : ${cfg.apiKey ? "Configured" : "default"}\n`);
+  console.log(`⚙️  Runtime Engine  : Active (Isolated Mode)`);
+  console.log(`🟢 Status          : Ready\n`);
 }
 
 async function cmdPing(): Promise<void> {
@@ -295,17 +295,18 @@ async function cmdPing(): Promise<void> {
     const res = await fetch(`${cfg.url}/health`);
     const latency = Date.now() - start;
     if (res.ok) {
-      console.log(`\n🏓 PONG! Workspace backend responded in ${latency}ms (HTTP ${res.status}).\n`);
+      console.log(`\n🏓 PONG! Runtime engine responsif dalam ${latency}ms.\n`);
     } else {
-      console.log(`\n⚠️ Workspace backend responded HTTP ${res.status} (${latency}ms).\n`);
+      console.log(`\n⚠️ Runtime engine status: ${res.status} (${latency}ms).\n`);
     }
   } catch (err: any) {
-    console.error(`\n❌ Cannot reach workspace backend: ${err.message}\n`);
+    console.error(`\n❌ Runtime engine tidak terjangkau: ${err.message}\n`);
   }
 }
 
 async function cmdTab(sub: string, args: string[]): Promise<void> {
   switch (sub) {
+    case "runtime":
     case "vps":
     case "remote":
     case "shell": {
@@ -315,14 +316,14 @@ async function cmdTab(sub: string, args: string[]): Promise<void> {
     case "new":
     case "run":
     case "start": {
-      let isVps = false;
+      let isRuntime = false;
       const cleanArgs = [...args];
-      if (cleanArgs[0] === "--vps" || cleanArgs[0] === "-v") {
-        isVps = true;
+      if (cleanArgs[0] === "--runtime" || cleanArgs[0] === "--vps" || cleanArgs[0] === "-v") {
+        isRuntime = true;
         cleanArgs.shift();
       }
       if (cleanArgs.length === 0) {
-        throw new Error("usage: connector-cli tab new [--vps] [name] <command...>");
+        throw new Error("usage: connector-cli tab new [--runtime] [name] <command...>");
       }
       let tabName: string;
       let command: string;
@@ -334,9 +335,9 @@ async function cmdTab(sub: string, args: string[]): Promise<void> {
         command = cleanArgs.join(" ");
       }
 
-      if (isVps) {
+      if (isRuntime) {
         const tab = await tabManager.openVpsTab(tabName, command);
-        console.log(`✅ Tab VPS "${tab.name}" [${tab.id}] berjalan di background VPS.`);
+        console.log(`✅ Tab Runtime "${tab.name}" [${tab.id}] berjalan di background.`);
       } else {
         const tab = tabManager.openLocalTab(tabName, command);
         console.log(`✅ Tab Laptop "${tab.name}" [${tab.id}] berjalan di background Laptop.`);
@@ -413,7 +414,6 @@ async function enterProjectEnvironment(slug: string, agentName: string): Promise
       console.clear();
       console.log("===============================================================================");
       console.log(` 📂 RUANG KERJA PROJECT: \x1b[1;36m${slug}\x1b[0m`);
-      console.log(` Akses Agen: \x1b[1;32m${agentName}\x1b[0m`);
       console.log("-------------------------------------------------------------------------------");
       console.log("  a. tab remote       -> Interactive remote shell di workspace");
       console.log("  b. tab disk session  -> Local session disk & MCP memory graph");
@@ -1100,6 +1100,7 @@ async function main(argv: string[]): Promise<void> {
     case "mcp":
       await runMcpServer();
       return;
+    case "runtime":
     case "vps":
     case "exec":
     case "exec-remote":

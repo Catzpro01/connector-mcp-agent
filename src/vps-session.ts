@@ -64,7 +64,7 @@ export class VpsSession {
 
   getPrompt(): string {
     const displayPath = this.formatDisplayPath(this.currentCwd);
-    return `\x1b[1;36m[ VPS ]\x1b[0m \x1b[1;32m${this.user}@${this.project}\x1b[0m:\x1b[1;34m${displayPath}\x1b[0m$ `;
+    return `\x1b[1;36m[ RT ]\x1b[0m \x1b[1;32m${this.user}@${this.project}\x1b[0m:\x1b[1;34m${displayPath}\x1b[0m$ `;
   }
 
   formatDisplayPath(p: string): string {
@@ -81,8 +81,10 @@ export class VpsSession {
 
   preprocessCommand(cmd: string): string {
     let c = cmd.trim();
-    // Intercept & strip redundant connector-cli prefixes inside VPS shell
-    if (c.startsWith("connector-cli vps ")) {
+    // Intercept & strip redundant connector-cli prefixes inside runtime shell
+    if (c.startsWith("connector-cli runtime ")) {
+      c = c.slice("connector-cli runtime ".length).trim();
+    } else if (c.startsWith("connector-cli vps ")) {
       c = c.slice("connector-cli vps ".length).trim();
     } else if (c.startsWith("connector-cli exec ")) {
       c = c.slice("connector-cli exec ".length).trim();
@@ -105,7 +107,7 @@ export class VpsSession {
     const trimmed = cmd.replace(/^(?:connector-cli\s+)?memory\s*/, "").trim();
 
     if (cmd === "graph" || trimmed === "graph" || trimmed === "") {
-      console.log("\n⏳ Mengambil Knowledge Graph dari VPS...");
+      console.log("\n⏳ Mengambil Knowledge Graph dari Persistent Memory...");
       const g = await getKnowledgeGraph(cfg, this.project);
       if (g.entities.length === 0) {
         console.log("Belum ada entitas di Knowledge Graph project ini. Gunakan 'learn <entity> <type> <observasi>'.\n");
@@ -204,7 +206,7 @@ export class VpsSession {
     const cfg = loadCliConfig();
 
     if (cmd === "reindex" || cmd === "connector-cli reindex") {
-      console.log("\n⏳ Memindai ulang codebase di VPS...");
+      console.log("\n⏳ Memindai ulang codebase...");
       const res = await reindexCode(cfg, this.project);
       if (res.success) {
         console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
@@ -330,9 +332,9 @@ export class VpsSession {
         `mkdir -p "$(dirname "${targetPath}")" && echo "${b64}" | base64 -d > "${targetPath}"`,
       );
       if (saveRes.exit === 0) {
-        console.log(`\x1b[1;32m✅ File '${filename}' berhasil disimpan ke container VPS (${Buffer.byteLength(newContent)} bytes).\x1b[0m\n`);
+        console.log(`\x1b[1;32m✅ File '${filename}' berhasil disimpan ke workspace (${Buffer.byteLength(newContent)} bytes).\x1b[0m\n`);
       } else {
-        console.error(`\x1b[31mGagal menyimpan ke container VPS: ${saveRes.stderr || "exit " + saveRes.exit}\x1b[0m\n`);
+        console.error(`\x1b[31mGagal menyimpan ke workspace: ${saveRes.stderr || "exit " + saveRes.exit}\x1b[0m\n`);
       }
     } catch (err: any) {
       console.error(`\x1b[31mGagal membaca file editan lokal: ${err.message}\x1b[0m\n`);
@@ -341,7 +343,7 @@ export class VpsSession {
 
   async handleInlineWrite(rl: { question: (q: string) => Promise<string> }, filename: string): Promise<void> {
     const targetPath = filename.startsWith("/") ? filename : `${this.currentCwd}/${filename}`;
-    console.log(`\n📝 Mode Tulis Langsung ke Container: '${filename}'`);
+    console.log(`\n📝 Mode Tulis Langsung ke Workspace: '${filename}'`);
     console.log("Ketik teks Anda di bawah ini. Masukkan 'EOF' atau 'SAVE' pada baris baru untuk menyimpan:\n");
 
     const lines: string[] = [];
@@ -356,9 +358,9 @@ export class VpsSession {
       `mkdir -p "$(dirname "${targetPath}")" && echo "${b64}" | base64 -d > "${targetPath}"`,
     );
     if (saveRes.exit === 0) {
-      console.log(`\x1b[1;32m✅ File '${filename}' berhasil disimpan ke container VPS (${Buffer.byteLength(fullText)} bytes).\x1b[0m\n`);
+      console.log(`\x1b[1;32m✅ File '${filename}' berhasil disimpan ke workspace (${Buffer.byteLength(fullText)} bytes).\x1b[0m\n`);
     } else {
-      console.error(`\x1b[31mGagal menyimpan ke container VPS: ${saveRes.stderr || "exit " + saveRes.exit}\x1b[0m\n`);
+      console.error(`\x1b[31mGagal menyimpan ke workspace: ${saveRes.stderr || "exit " + saveRes.exit}\x1b[0m\n`);
     }
   }
 
@@ -429,13 +431,13 @@ export class VpsSession {
     await this.init();
     console.clear();
     console.log("===============================================================================");
-    console.log(" 🌐 REMOTE VPS CONTAINER SESSION — PURE HTTP STREAMABLE MCP (NO SSH)");
-    console.log(` Host / Sandbox : ${this.host} (Terisolasi di Container)`);
-    console.log(` Akses Akun     : ${this.user} (Root Project Sandbox)`);
-    console.log(` Project Folder : /work (Bind mount ke host /var/lib/connector/projects/${this.project})`);
+    console.log(" 🟢 WORKSPACE RUNTIME ENVIRONMENT — ISOLATED TASK ENGINE");
+    console.log(` Host / Sandbox : ${this.host} (Isolated Environment)`);
+    console.log(` Akses Akun     : ${this.user} (Runtime Task Worker)`);
+    console.log(` Project Folder : /work`);
     console.log("-------------------------------------------------------------------------------");
     console.log(" 💡 Navigasi Cepat & Fitur:");
-    console.log("   • 'help'                    -> Panduan lengkap seluruh perintah di tab VPS");
+    console.log("   • 'help'                    -> Panduan lengkap seluruh perintah di tab runtime");
     console.log("   • 'tabs'                    -> Lihat daftar seluruh tab live");
     console.log("   • 'switch <name|id>'        -> Cek / pindah ke tab lain untuk melihat output");
     console.log("   • 'prev'                    -> Cepat kembali ke tab sebelumnya yang dicek");
@@ -477,12 +479,12 @@ export class VpsSession {
 
         // Anti-Exit Trap
         if (input === "exit" || input === "quit") {
-          const confirm = (await rl.question("\nKeluar dari sesi tab VPS dan kembali ke menu project? [y/N]: ")).trim().toLowerCase();
+          const confirm = (await rl.question("\nKeluar dari Workspace Runtime dan kembali ke menu project? [y/N]: ")).trim().toLowerCase();
           if (confirm === "y" || confirm === "yes") {
-            console.log("\n👋 Keluar dari Tab VPS. Kembali ke menu project.\n");
+            console.log("\n👋 Keluar dari Workspace Runtime. Kembali ke menu project.\n");
             break;
           } else {
-            console.log("ℹ️ Pembatalan keluar. Tetap berada di sesi Tab VPS.\n");
+            console.log("ℹ️ Pembatalan keluar. Tetap berada di Workspace Runtime.\n");
             continue;
           }
         }
@@ -504,7 +506,7 @@ export class VpsSession {
           if (res.success) {
             console.log(`\x1b[32m✓ Laporan [${uid}] berhasil diposting ke GitHub Issues #progress!\x1b[0m\n`);
           } else {
-            console.log(`\x1b[33m⚠️ Laporan tercatat lokal [${uid}], server relay tidak terjangkau.\x1b[0m\n`);
+            console.log(`\x1b[33m⚠️ Laporan tercatat lokal [${uid}], task worker tidak terjangkau.\x1b[0m\n`);
           }
           continue;
         }
@@ -587,21 +589,21 @@ export class VpsSession {
         if (input.startsWith("bg ") || input.endsWith("&")) {
           const bgCmd = input.startsWith("bg ") ? input.slice(3).trim() : input.slice(0, -1).trim();
           const tabName = `bg-${Date.now().toString(36)}`;
-          console.log(`⏳ Membuka background tab di container VPS: "${bgCmd}"...`);
+          console.log(`⏳ Memulai background task: "${bgCmd}"...`);
           const tab = await tabManager.openVpsTab(tabName, `cd "${this.currentCwd}" && { ${bgCmd} ; }`, this.project);
           this.lastTabId = tab.id;
-          console.log(`🟢 Tab background VPS aktif: ${tab.name} [${tab.id}]`);
+          console.log(`🟢 Task background aktif: ${tab.name} [${tab.id}]`);
           console.log(`   Gunakan 'switch ${tab.name}' atau 'connector-cli tab attach ${tab.id}' untuk cek hasil.\n`);
           continue;
         }
 
         // Help & Info
         if (input === "help" || input === "connector-cli help") {
-          console.log("\n======================== BANTUAN PERINTAH TAB VPS ========================");
-          console.log(" Anda berada di dalam Tab VPS (Remote Sandbox Container).");
-          console.log(" Perintah Shell Linux dijalankan langsung di container:");
+          console.log("\n======================== BANTUAN PERINTAH TAB RUNTIME ========================");
+          console.log(" Anda berada di dalam Workspace Runtime Environment.");
+          console.log(" Perintah Shell Linux dijalankan langsung di isolated environment:");
           console.log("   whoami, pwd, ls -la, cat <file>, git status, npm test, python3 app.py");
-          console.log("\n Akses MCP Knowledge Graph (permanen di VPS):");
+          console.log("\n Akses MCP Knowledge Graph (Persistent Memory):");
           console.log("   graph                                -> Tampilkan seluruh Knowledge Graph");
           console.log("   search <query>                       -> Cari entitas & relasi di graph");
           console.log("   node <nama>                          -> Lihat detail sub-graph entitas");
@@ -611,18 +613,18 @@ export class VpsSession {
           console.log("   code <query>                         -> Pencarian kode instan secepat Cursor");
           console.log("   symbol <nama>                        -> Temukan definisi fungsi / class / struct");
           console.log("   outline <file>                       -> Lihat daftar simbol file");
-          console.log("   reindex                              -> Pindai ulang AST codebase di VPS");
+          console.log("   reindex                              -> Pindai ulang AST codebase");
           console.log("\n Navigasi & File Editor:");
           console.log("   nano <file> | vim <file>             -> Edit file di terminal lokal");
-          console.log("   write <file>                         -> Tulis file langsung ke container");
+          console.log("   write <file>                         -> Tulis file langsung ke workspace");
           console.log("   tabs | switch <name>                 -> Multitasking background tab");
           console.log("   exit                                 -> Kembali ke menu project");
-          console.log("==========================================================================\n");
+          console.log("=============================================================================\n");
           continue;
         }
 
-        if (input === "connector-cli" || input === "connector-cli vps") {
-          console.log("ℹ️ Anda sudah berada di dalam Tab VPS (Remote Container).");
+        if (input === "connector-cli" || input === "connector-cli runtime") {
+          console.log("ℹ️ Anda sudah berada di dalam Workspace Runtime Environment.");
           console.log("Ketik 'help' untuk daftar perintah, atau ketik langsung perintah Linux (misal: 'whoami', 'ls', 'pwd').\n");
           continue;
         }
@@ -677,7 +679,7 @@ export class VpsSession {
             console.log(`\x1b[33m[Exit code: ${res.exit}]\x1b[0m`);
           }
         } catch (err: any) {
-          console.error(`\x1b[31mError VPS: ${err.message}\x1b[0m\n`);
+          console.error(`\x1b[31mError runtime: ${err.message}\x1b[0m\n`);
         }
       }
     } finally {

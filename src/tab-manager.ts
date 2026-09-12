@@ -56,7 +56,7 @@ export class TabManager {
   }
 
   /**
-   * Buka Tab baru di VPS remote
+   * Buka Tab baru di workspace runtime engine
    */
   async openVpsTab(name: string, command: string, project = "smoke-app"): Promise<UnifiedTab> {
     const cfg = loadCliConfig();
@@ -83,7 +83,7 @@ export class TabManager {
   }
 
   /**
-   * Mengumpulkan seluruh tab live (Laptop + VPS)
+   * Mengumpulkan seluruh tab live (Laptop + Runtime Engine)
    */
   async listTabs(): Promise<UnifiedTab[]> {
     const result: UnifiedTab[] = [];
@@ -102,7 +102,7 @@ export class TabManager {
       });
     }
 
-    // 2. Ambil VPS Tabs
+    // 2. Ambil Runtime Tabs
     try {
       const cfg = loadCliConfig();
       const vpsTasks = await callMcpTool<VpsTaskRecord[]>(cfg, "exec.list", {});
@@ -122,7 +122,7 @@ export class TabManager {
         }
       }
     } catch {
-      // Abaikan jika VPS tidak merespons
+      // Abaikan jika runtime engine tidak merespons
     }
 
     return result;
@@ -174,9 +174,9 @@ export class TabManager {
         status?: string;
       }
       const res = await callMcpTool<AttachResponse>(cfg, "exec.attach", { task: tab.id });
-      return { tab, logs: res?.output || "(belum ada output dari VPS)" };
+      return { tab, logs: res?.output || "(belum ada output dari runtime task)" };
     } catch (e) {
-      return { tab, logs: `Gagal membaca log VPS: ${(e as Error).message}` };
+      return { tab, logs: `Gagal membaca log: ${(e as Error).message}` };
     }
   }
 
@@ -211,13 +211,13 @@ export class TabManager {
       };
     }
 
-    // VPS Target
+    // Remote/Runtime Target
     try {
       const cfg = loadCliConfig();
       await callMcpTool(cfg, "exec.kill", { task: tab.id });
-      return { success: true, message: `Tab VPS "${tab.name}" (${tab.id}) berhasil dihentikan.` };
+      return { success: true, message: `Tab runtime "${tab.name}" (${tab.id}) berhasil dihentikan.` };
     } catch (e) {
-      return { success: false, message: `Gagal menghentikan tab VPS: ${(e as Error).message}` };
+      return { success: false, message: `Gagal menghentikan tab runtime: ${(e as Error).message}` };
     }
   }
 

@@ -94,20 +94,20 @@ export class SessionDiskSession {
           source: "session_disk",
         });
 
-        // 3. Forward VPS execution directly if requested inside session disk
-        if (input.startsWith("vps ") || input.startsWith("exec ")) {
-          const vpsCmd = input.replace(/^(?:vps|exec)\s+/, "").trim();
-          console.log(`\n⏳ Menjalankan di container VPS: "${vpsCmd}"...`);
+        // 3. Forward runtime execution directly if requested inside session disk
+        if (input.startsWith("exec ")) {
+          const execCmd = input.replace(/^exec\s+/, "").trim();
+          console.log(`\n⏳ Menjalankan perintah: "${execCmd}"...`);
           try {
             const res = await callMcpTool<{ stdout: string; stderr: string; exit: number }>(cfg, "exec.run", {
               project: this.project,
-              command: vpsCmd,
+              command: execCmd,
             });
             if (res.stdout) process.stdout.write(res.stdout);
             if (res.stderr) process.stderr.write(`\x1b[31m${res.stderr}\x1b[0m`);
             if (res.exit !== 0) console.log(`\x1b[33m[Exit code: ${res.exit}]\x1b[0m`);
           } catch (e: any) {
-            console.error(`Gagal eksekusi VPS: ${e.message}\n`);
+            console.error(`Gagal menjalankan perintah: ${e.message}\n`);
           }
           console.log();
           continue;
@@ -143,7 +143,7 @@ export class SessionDiskSession {
           console.log("   code <query>                         -> Cari baris & simbol kode secepat Cursor");
           console.log("   symbol <nama>                        -> Temukan definisi fungsi / class / struct");
           console.log("   outline <file>                       -> Lihat susunan simbol suatu file");
-          console.log("   reindex                              -> Re-index codebase project di VPS");
+          console.log("   reindex                              -> Re-index codebase project");
           console.log("\n   exit                                 -> Kembali ke menu project");
           console.log("==========================================================================\n");
           continue;
@@ -174,7 +174,7 @@ export class SessionDiskSession {
 
         // ---- Memory Graph Commands ----
         if (input === "graph") {
-          console.log("\n⏳ Mengambil Knowledge Graph dari VPS...");
+          console.log("\n⏳ Mengambil Knowledge Graph dari Persistent Memory...");
           const g = await getKnowledgeGraph(cfg, this.project);
           if (g.entities.length === 0) {
             console.log("Belum ada entitas di Knowledge Graph project ini. Gunakan 'learn <entity> <type> <observasi>'.\n");
@@ -335,7 +335,7 @@ export class SessionDiskSession {
         }
 
         if (input === "reindex") {
-          console.log("\n⏳ Memindai ulang codebase di VPS...");
+          console.log("\n⏳ Memindai ulang codebase...");
           const res = await reindexCode(cfg, this.project);
           if (res.success) {
             console.log(`✓ Re-index selesai: ${res.scannedFiles} files, ${res.indexedSymbols} symbols terindeks.\n`);
